@@ -90,12 +90,27 @@ parseGroup :: CanParseVar a => Parser (Term a)
 parseGroup = do
   _ <- char '('
   subTerm <- some parseTerm
+  skipSpace
   _ <- char ')'
   pure $ Group subTerm
 
+parseCommaSep :: CanParseVar a => Parser (Term a)
+parseCommaSep = do
+  _ <- char '{'
+  subTerm <- sepBy parseTerm (skipSpace >> char ';')
+  skipSpace
+  _ <- char '}'
+  pure $ foldr1 (\a b -> Group [ a, Sym ";", b ]) subTerm
+
 
 symbolChar :: Char -> Bool
-symbolChar c = not $ or [ isSpace c, c == '(', c == ')']
+symbolChar c = not $ or
+  [ isSpace c
+  , c == '('
+  , c == ')'
+  , c == '{'
+  , c == '}'
+  ]
 
 parseMatchVariable :: CanParseVar a => Parser (Term a)
 parseMatchVariable = do
@@ -112,7 +127,8 @@ parseStep = do
 parseTerm :: CanParseVar a => Parser (Term a)
 parseTerm = do
   skipSpace
-  choice [ parseGroup
+  choice [ parseCommaSep
+         , parseGroup
          , parseSym
          ]
 
