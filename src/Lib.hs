@@ -180,19 +180,12 @@ unsafeGetPrimitiveBinding' bs name
 
 macros :: [Macro]
 macros =
-  [ Primitive (doAParseJob "((macro #a #b); #c)") (\bs -> do
+  [ Primitive (doAParseJob "((macro #a #b); #c)") $ \bs -> do
       let a = unsafeGetPrimitiveBinding bs "#a"
           b = unsafeGetPrimitiveBinding bs "#b"
           c = unsafeGetPrimitiveBinding' bs "#c"
-      modify $ (++ [Macro a b])
-      pure $ c
-    )
-  , mkMacro "(if true then #a else #b)" "#a"
-  , mkMacro "(if false then #a else #b)" "#b"
-  , mkMacro "((#a / #b); #c)" "((macro #a #b); #c)"
-  , mkMacro "(#a rusu)" "(!#a maguire)"
-  , mkMacro "(#a)" "#a"
-  , mkMacro "defined" "(david rusu)"
+      modify $ (Macro a b :)
+      pure c
   ]
 
 step :: Term Void1 -> State [Macro] (Maybe (Term Void1))
@@ -200,8 +193,6 @@ step t = do
   ms <- get
   z <- for ms $ \m -> attemptMacro t m
   pure $ getFirst $ foldMap First z
-
-  -- pure $ getFirst $ foldMap (First . attemptMacro t) ms
 
 force :: Term Void1 -> State [Macro] (Term Void1)
 force t = do
