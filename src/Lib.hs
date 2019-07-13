@@ -11,13 +11,13 @@
 
 module Lib where
 
+import Data.Generics hiding (empty)
 import Data.Traversable
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Attoparsec.Text
 import           Data.Char
-import           Data.Data
 import           Data.Functor.Identity
 import           Data.List (find)
 import           Data.Maybe
@@ -178,6 +178,13 @@ attemptToBind prog (MatchVariable (Identity m)) = Just [Binding m prog]
 attemptToBind _ _  = Nothing
 
 
+substTerm :: Term Identity -> Term Identity -> Term Identity -> Term Identity
+substTerm pattern rewrite =
+  everywhere $ mkT $ \case
+    a | a == pattern -> rewrite
+      | otherwise -> a
+
+
 substBindings :: [Binding] -> Term Identity -> State [Macro] (Term Void1)
 substBindings _ (Sym s) = pure $ Sym s
 substBindings bs (Group s) = fmap Group $ traverse (substBindings bs) s
@@ -226,6 +233,11 @@ macros =
           c = unsafeGetPrimitiveBinding' bs "#c"
       modify $ (Macro a b :)
       pure c
+  , Primitive (doAParseJob "(replace #a #b #c)") $ \bs -> do
+      let a = unsafeGetPrimitiveBinding bs "#a"
+          Sym b = unsafeGetPrimitiveBinding' bs "#b"
+          c = unsafeGetPrimitiveBinding' bs "#c"
+      substBindings [Binding b c] $ substTerm (Sym b) (MatchVariable (Identity b)) a
   ]
 
 step :: Term Void1 -> State [Macro] (Maybe (Term Void1))
