@@ -1,4 +1,7 @@
 resolver: lts-13.0
 
+extra-deps:
+  - ghcid-0.7.5
+
 packages:
 - .
