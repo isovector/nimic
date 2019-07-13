@@ -24,6 +24,7 @@ dependencies:
 - attoparsec
 - text
 - syb
+- mtl
 
 library:
   source-dirs: src

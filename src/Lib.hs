@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE EmptyCase             #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -10,15 +11,17 @@
 
 module Lib where
 
-import Data.Monoid
-import Data.List (find)
+import Data.Traversable
 import           Control.Applicative
 import           Control.Monad
+import           Control.Monad.State
 import           Data.Attoparsec.Text
 import           Data.Char
-import Data.Maybe
 import           Data.Data
 import           Data.Functor.Identity
+import           Data.List (find)
+import           Data.Maybe
+import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
 
@@ -45,11 +48,12 @@ deriving instance (forall x. Eq x => Eq (f x)) => Eq (Term f)
 deriving instance (forall x. Show x => Show (f x)) => Show (Term f)
 deriving instance (forall x. Data x => Data (f x), Typeable f) => Data (Term f)
 
-data Macro = Macro
-  { macroMatch   :: Term Identity
-  , macroRewrite :: Term Identity
-  }
-  deriving (Eq, Data, Show)
+data Macro
+  = Primitive (Term Void1) ([Binding] -> State [Macro] (Term Void1))
+  | Macro
+    { macroMatch   :: Term Identity
+    , macroRewrite :: Term Identity
+    }
 
 type MatchName = Text
 
@@ -87,7 +91,7 @@ parseGroup = do
 
 
 symbolChar :: Char -> Bool
-symbolChar c = not $ or [ isSpace c, c == '#', c == '(', c == ')', c == '!']
+symbolChar c = not $ or [ isSpace c, c == '(', c == ')', c == '!']
 
 parseMatchVariable :: CanParseVar a => Parser (Term a)
 parseMatchVariable = do
@@ -105,7 +109,6 @@ parseTerm :: CanParseVar a => Parser (Term a)
 parseTerm = do
   skipSpace
   choice [ parseGroup
-         , parseMatchVariable
          , parseStep
          , parseSym
          ]
@@ -132,17 +135,16 @@ attemptToBind prog (MatchVariable (Identity m)) = Just [Binding m prog]
 attemptToBind _ _  = Nothing
 
 
-substBindings :: [Macro] -> [Binding] -> Term Identity -> Term Void1
-substBindings _ _ (Sym s) = Sym s
-substBindings ms bs (Group s) = Group $ fmap (substBindings ms bs) s
-substBindings _ bs (MatchVariable (Identity n)) =
+substBindings :: [Binding] -> Term Identity -> State [Macro] (Term Void1)
+substBindings _ (Sym s) = pure $ Sym s
+substBindings bs (Group s) = fmap Group $ traverse (substBindings bs) s
+substBindings bs (MatchVariable (Identity n)) =
   case find ((== n) . bindingName) bs of
-    Just binding -> bindingValue binding
+    Just binding -> pure $ bindingValue binding
     Nothing      -> error "unbound error!"
-substBindings ms bs (Step (Identity s)) =
-  fromMaybe (error "couldn't step!")
-    $ step ms
-    $ substBindings ms bs s
+substBindings bs (Step (Identity t)) = do
+  t' <- substBindings bs t
+  fmap (fromMaybe (error "couldn't step!")) $ step t'
 
 
 mkMacro :: Text -> Text -> Macro
@@ -158,26 +160,64 @@ macros =
   [ mkMacro "(if true then #a else #b)" "#a"
   , mkMacro "(if false then #a else #b)" "#b"
   , mkMacro "(if #c then #a else #b)" "(if !#c then #a else #b)"
-  , mkMacro "(not true)" "false"
+  , Primitive (Group [Sym "macro", Sym "#a", Sym "#b"]) (\bs -> do
+      let Just a = find ((== "#a") . bindingName) bs
+          Just b = find ((== "#b") . bindingName) bs
+      modify $ (++ [Macro (coerceIt $ bindingValue a) (coerceIt $ bindingValue b)])
+      pure $ Sym "defined"
+    )
   ]
 
-step :: [Macro] -> Term Void1 -> Maybe (Term Void1)
-step ms t = getFirst $ foldMap (First . attemptMacro ms t) ms
+step :: Term Void1 -> State [Macro] (Maybe (Term Void1))
+step t = do
+  ms <- get
+  z <- for ms $ \m -> attemptMacro t m
+  pure $ getFirst $ foldMap First z
 
-force :: [Macro] -> Term Void1 -> Term Void1
-force ms t = fromMaybe t $ fmap (force ms) $ step ms t
+  -- pure $ getFirst $ foldMap (First . attemptMacro t) ms
 
-attemptMacro :: [Macro] -> Term Void1 -> Macro -> Maybe (Term Void1)
-attemptMacro ms prog (Macro pattern rewrite) = do
-  bs <- attemptToBind prog pattern
-  pure $ substBindings ms bs rewrite
+force :: Term Void1 -> State [Macro] (Term Void1)
+force t = do
+  mt <- step t
+  case mt of
+    Nothing -> pure t
+    Just t' -> force t'
+
+absurd :: Void1 a -> b
+absurd a = case a of
+
+
+coerceIt :: Term Void1 -> Term Identity
+coerceIt (Sym s) | T.isPrefixOf "#" s = MatchVariable $ Identity s
+                 | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
+                 | otherwise = Sym s
+coerceIt (Group g)         = Group $ fmap coerceIt g
+coerceIt (MatchVariable a) = absurd a
+coerceIt (Step a)          = absurd a
+
+
+attemptMacro :: Term Void1 -> Macro -> State [Macro] (Maybe (Term Void1))
+attemptMacro prog (Primitive pattern rewrite) = do
+  let pattern' = coerceIt pattern
+  mbs <- pure $ attemptToBind prog pattern'
+  case mbs of
+    Just bs -> do
+      z <- rewrite bs
+      pure $ Just z
+    Nothing -> pure Nothing
+
+attemptMacro prog (Macro pattern rewrite) = do
+  mbs <- pure $ attemptToBind prog pattern
+  case mbs of
+    Just bs -> fmap Just $ substBindings bs rewrite
+    Nothing -> pure Nothing
 
 
 
 bar :: Either String (Term Void1)
 bar = do
-  program <- parseOnly parseTerm "(if (not true) then 5 else 6)"
-  pure $ force macros program
+  program <- parseOnly parseTerm "(macro defined finished)"
+  pure $ evalState (force program) macros
 
 
 -- $> bar
