@@ -1,10 +1,12 @@
-cabal-version: 1.12
-
--- This file has been generated from package.yaml by hpack version 0.31.2.
+-- This file has been generated from package.yaml by hpack version 0.28.2.
 --
 -- see: https://github.com/sol/hpack
 --
+<<<<<<< HEAD
 -- hash: 6cf57bdf804015d2b58c7719c91de161dfc00b159c144c27cb21a0908edb2a0a
+=======
+-- hash: cad3fa04b14d97a0b5ed3b4c15b9045032b83629fd42a202b9ea8087b33956ab
+>>>>>>> bash special form for your everyday needs
 
 name:           nimic
 version:        0.1.0.0
@@ -17,9 +19,10 @@ copyright:      2019 Sandy Maguire
 license:        BSD3
 license-file:   LICENSE
 build-type:     Simple
+cabal-version:  >= 1.10
 extra-source-files:
-    README.md
     ChangeLog.md
+    README.md
 
 source-repository head
   type: git
@@ -36,7 +39,11 @@ library
       attoparsec
     , base >=4.7 && <5
     , mtl
+<<<<<<< HEAD
     , pretty
+=======
+    , process
+>>>>>>> bash special form for your everyday needs
     , syb
     , text
   default-language: Haskell2010
@@ -53,7 +60,11 @@ executable exe
     , base >=4.7 && <5
     , mtl
     , nimic
+<<<<<<< HEAD
     , pretty
+=======
+    , process
+>>>>>>> bash special form for your everyday needs
     , syb
     , text
   default-language: Haskell2010

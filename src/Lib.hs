@@ -7,6 +7,8 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+
 {-# OPTIONS_GHC -Wall              #-}
 
 module Lib where
@@ -24,7 +26,12 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
+<<<<<<< HEAD
 import Text.PrettyPrint.HughesPJ hiding (char, empty, ptext)
+=======
+import System.Process
+import System.IO.Unsafe
+>>>>>>> bash special form for your everyday needs
 
 data Void1 a
   deriving Data
@@ -174,9 +181,11 @@ attemptToBind (Group l) (Group l') = do
   guard $ length l == length l'
   bindings <- sequence $ zipWith attemptToBind l l'
   Just $ join bindings
+
 attemptToBind prog (MatchVariable (Identity m)) = Just [Binding m prog]
 attemptToBind _ _  = Nothing
 
+<<<<<<< HEAD
 
 substTerm :: Term Identity -> Term Identity -> Term Identity -> Term Identity
 substTerm pattern rewrite =
@@ -185,6 +194,8 @@ substTerm pattern rewrite =
       | otherwise -> a
 
 
+=======
+>>>>>>> bash special form for your everyday needs
 substBindings :: [Binding] -> Term Identity -> State [Macro] (Term Void1)
 substBindings _ (Sym s) = pure $ Sym s
 substBindings bs (Group s) = fmap Group $ traverse (substBindings bs) s
@@ -225,6 +236,11 @@ unsafeGetPrimitiveBinding' bs name
   . maybe (error "unsafely2") id
   $ find ((== name) . bindingName) bs
 
+termToShell :: Term Void1 -> Text
+termToShell (Sym s) = s
+termToShell (Group ts) = foldMap ((<> " ") . termToShell) ts
+termToShell o = T.pack $ "echo 'what the heck are you doing " <> show o <> "'"
+
 macros :: [Macro]
 macros =
   [ Primitive (doAParseJob "((macro #a #b); #c)") $ \bs -> do
@@ -238,6 +254,12 @@ macros =
           Sym b = unsafeGetPrimitiveBinding' bs "#b"
           c = unsafeGetPrimitiveBinding' bs "#c"
       substBindings [Binding b c] $ substTerm (Sym b) (MatchVariable (Identity b)) a
+  , Primitive (doAParseJob "(bash #cmd)") $ \bs -> do
+      let cmdTerm = unsafeGetPrimitiveBinding' bs "#cmd"
+          (shellCmd :: String) = T.unpack $ termToShell cmdTerm
+          stdout = T.pack $ unsafePerformIO $ readCreateProcess (shell shellCmd) ""
+          shellTerm = either (error "***Shell parse***") id . parseOnly parseImplicitGroup $ stdout
+      pure shellTerm
   ]
 
 step :: Term Void1 -> State [Macro] (Maybe (Term Void1))
@@ -281,11 +303,9 @@ attemptMacro prog (Macro pattern rewrite) = do
     Just bs -> fmap Just $ substBindings bs rewrite
     Nothing -> pure Nothing
 
-
-
 bar :: Either String (Term Void1)
 bar = do
-  program <- parseOnly parseTerm "((david / sandy); ((done / david); done))"
+  program <- parseOnly parseTerm "(bash ls)"
   pure $ evalState (force program) macros
 
 
