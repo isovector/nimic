@@ -25,26 +25,26 @@ data Macro
 
 type MatchName = Text
 
-data Binding 
+data Binding
   = Binding {
       name:: MatchName,
       value:: Term Void
     }
     deriving (Eq, Ord, Show)
-  
+
 parseToken :: Parser Text
 parseToken = do
   c <- satisfy $ symbolChar
   cs <- parseToken'
   pure $ T.pack $ c:cs
-  
+
 
 parseToken' :: Parser [Char]
 parseToken' = do
-  isEnd <- atEnd
-  if isEnd
-    then pure []
-    else (:) <$> satisfy symbolChar <*> parseToken'
+  mc <- peekChar
+  case mc of
+    Just c | symbolChar c -> (:) <$> char c <*> parseToken'
+    _ -> pure []
 
 parseSym :: Parser (Term MatchName)
 parseSym = do
@@ -54,13 +54,13 @@ parseSym = do
 parseGroup :: Parser (Term MatchName)
 parseGroup = do
   char '('
-  subTerm <- parseTerm
+  subTerm <- some parseTerm
   char ')'
-  pure $ Group [subTerm]
+  pure $ Group subTerm
 
 
 symbolChar :: Char -> Bool
-symbolChar c = not $ or [ isSpace c, c == '#', c == '(', c == ')'] 
+symbolChar c = not $ or [ isSpace c, c == '#', c == '(', c == ')']
 
 parseMatchVariable :: Parser (Term MatchName)
 parseMatchVariable = do
@@ -70,10 +70,11 @@ parseMatchVariable = do
 
 parseTerm :: Parser (Term MatchName)
 parseTerm = do
-  --skipSpace
-  parseSym
--- Test choice [
---         ]
+  skipSpace
+  choice [ parseGroup
+         , parseMatchVariable
+         , parseSym
+         ]
 
 attemptToBind :: Term Void -> Term Text -> Maybe [Binding]
 attemptToBind (Sym s) (Sym s') | s == s' = Just []
@@ -87,7 +88,7 @@ attemptToBind _ _  = Nothing
 
 
 
-runParser :: Parser a -> Text -> Either String a 
+runParser :: Parser a -> Text -> Either String a
 runParser p source = runParser' $ parse p source
 
 
@@ -96,7 +97,7 @@ runParser' iRes = case iRes of
   Partial f -> runParser' $ f ""
   Done i r -> Right r
 
-bar = parseTest parseGroup "(a)"
-  
+main = parseTest parseGroup "((((hello world))))"
+
 
 -- $> bar

@@ -64,6 +64,12 @@ false; [a]
 
 
 ```
+nil is a value
+cons is a value
+```
+
+
+```
 let [a] = [b] in [c]
 --------------------
 <foo [a] [b]>  [c]
@@ -88,6 +94,10 @@ emit [a]; [rest]
 ------------
 [rest]; [a]
 ```
+
+
+
+
 
 
 ```
