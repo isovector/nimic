@@ -26,12 +26,9 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
-<<<<<<< HEAD
-import Text.PrettyPrint.HughesPJ hiding (char, empty, ptext)
-=======
+import Text.PrettyPrint.HughesPJ hiding (char, empty, ptext, (<>))
 import System.Process
 import System.IO.Unsafe
->>>>>>> bash special form for your everyday needs
 
 data Void1 a
   deriving Data
@@ -185,17 +182,12 @@ attemptToBind (Group l) (Group l') = do
 attemptToBind prog (MatchVariable (Identity m)) = Just [Binding m prog]
 attemptToBind _ _  = Nothing
 
-<<<<<<< HEAD
-
 substTerm :: Term Identity -> Term Identity -> Term Identity -> Term Identity
 substTerm pattern rewrite =
   everywhere $ mkT $ \case
     a | a == pattern -> rewrite
       | otherwise -> a
 
-
-=======
->>>>>>> bash special form for your everyday needs
 substBindings :: [Binding] -> Term Identity -> State [Macro] (Term Void1)
 substBindings _ (Sym s) = pure $ Sym s
 substBindings bs (Group s) = fmap Group $ traverse (substBindings bs) s
@@ -239,7 +231,7 @@ unsafeGetPrimitiveBinding' bs name
 termToShell :: Term Void1 -> Text
 termToShell (Sym s) = s
 termToShell (Group ts) = foldMap ((<> " ") . termToShell) ts
-termToShell o = T.pack $ "echo 'what the heck are you doing " <> show o <> "'"
+termToShell o = T.pack $ "echo 'what the heck are you doing" <> show o <> "'"
 
 macros :: [Macro]
 macros =

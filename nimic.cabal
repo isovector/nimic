@@ -2,11 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
-<<<<<<< HEAD
--- hash: 6cf57bdf804015d2b58c7719c91de161dfc00b159c144c27cb21a0908edb2a0a
-=======
--- hash: cad3fa04b14d97a0b5ed3b4c15b9045032b83629fd42a202b9ea8087b33956ab
->>>>>>> bash special form for your everyday needs
+-- hash: f34cc3b27e40e67b622298880f997747dc3ecaf03cfb019fc4f615dbe027f9af
 
 name:           nimic
 version:        0.1.0.0
@@ -39,11 +35,8 @@ library
       attoparsec
     , base >=4.7 && <5
     , mtl
-<<<<<<< HEAD
     , pretty
-=======
     , process
->>>>>>> bash special form for your everyday needs
     , syb
     , text
   default-language: Haskell2010
@@ -60,11 +53,8 @@ executable exe
     , base >=4.7 && <5
     , mtl
     , nimic
-<<<<<<< HEAD
     , pretty
-=======
     , process
->>>>>>> bash special form for your everyday needs
     , syb
     , text
   default-language: Haskell2010

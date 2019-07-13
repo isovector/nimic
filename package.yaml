@@ -25,11 +25,8 @@ dependencies:
 - text
 - syb
 - mtl
-<<<<<<< HEAD
 - pretty
-=======
 - process
->>>>>>> bash special form for your everyday needs
 
 library:
   source-dirs: src
