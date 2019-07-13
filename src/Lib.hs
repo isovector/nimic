@@ -10,11 +10,13 @@
 
 module Lib where
 
+import Data.Monoid
 import Data.List (find)
 import           Control.Applicative
 import           Control.Monad
 import           Data.Attoparsec.Text
 import           Data.Char
+import Data.Maybe
 import           Data.Data
 import           Data.Functor.Identity
 import           Data.Text (Text)
@@ -36,7 +38,8 @@ data Term f
   = Sym Text
   | Group [Term f]
   | MatchVariable (f MatchName)
-  | Force (f (Term f))
+  -- TODO(sandy): add type safety so this is only on the bottom later!
+  | Step (f (Term f))
 
 deriving instance (forall x. Eq x => Eq (f x)) => Eq (Term f)
 deriving instance (forall x. Show x => Show (f x)) => Show (Term f)
@@ -46,7 +49,7 @@ data Macro = Macro
   { macroMatch   :: Term Identity
   , macroRewrite :: Term Identity
   }
-  deriving Data
+  deriving (Eq, Data, Show)
 
 type MatchName = Text
 
@@ -84,7 +87,7 @@ parseGroup = do
 
 
 symbolChar :: Char -> Bool
-symbolChar c = not $ or [ isSpace c, c == '#', c == '(', c == ')']
+symbolChar c = not $ or [ isSpace c, c == '#', c == '(', c == ')', c == '!']
 
 parseMatchVariable :: CanParseVar a => Parser (Term a)
 parseMatchVariable = do
@@ -92,22 +95,32 @@ parseMatchVariable = do
   varName <- parseVarName
   pure $ MatchVariable varName
 
+parseStep :: CanParseVar a => Parser (Term a)
+parseStep = do
+  _ <- char '!'
+  v <- parseMatchVariable
+  pure $ Step $ introduce v
+
 parseTerm :: CanParseVar a => Parser (Term a)
 parseTerm = do
   skipSpace
   choice [ parseGroup
          , parseMatchVariable
+         , parseStep
          , parseSym
          ]
 
 class CanParseVar f where
   parseVarName :: Parser (f MatchName)
+  introduce :: Term f -> f (Term f)
 
 instance CanParseVar Identity where
   parseVarName = Identity <$> parseToken
+  introduce = Identity
 
 instance CanParseVar Void1 where
   parseVarName = empty
+  introduce = error "can't introduce"
 
 attemptToBind :: Term Void1 -> Term Identity -> Maybe [Binding]
 attemptToBind (Sym s) (Sym s') | s == s' = Just []
@@ -119,27 +132,17 @@ attemptToBind prog (MatchVariable (Identity m)) = Just [Binding m prog]
 attemptToBind _ _  = Nothing
 
 
-coerceBack :: Term Identity -> Term Void1
-coerceBack (Sym s)           = Sym s
-coerceBack (Group s)         = Group $ fmap coerceBack s
-coerceBack (Force s)         = error $ "unforced " ++ show s
-coerceBack (MatchVariable s) = error $ "unbound " ++ show s
-
-substBindings :: [Binding] -> Term Identity -> Term Void1
-substBindings _ (Sym s) = Sym s
-substBindings bs (Group s) = Group $ fmap (substBindings bs) s
-substBindings bs (MatchVariable (Identity n)) =
+substBindings :: [Macro] -> [Binding] -> Term Identity -> Term Void1
+substBindings _ _ (Sym s) = Sym s
+substBindings ms bs (Group s) = Group $ fmap (substBindings ms bs) s
+substBindings _ bs (MatchVariable (Identity n)) =
   case find ((== n) . bindingName) bs of
     Just binding -> bindingValue binding
     Nothing      -> error "unbound error!"
-substBindings _ (Force _s) = undefined
-
-
-attemptMacro :: Term Void1 -> Macro -> Maybe (Term Void1)
-attemptMacro prog (Macro pattern rewrite) = do
-  bs <- attemptToBind prog pattern
-  pure $ substBindings bs rewrite
-
+substBindings ms bs (Step (Identity s)) =
+  fromMaybe (error "couldn't step!")
+    $ step ms
+    $ substBindings ms bs s
 
 
 mkMacro :: Text -> Text -> Macro
@@ -154,18 +157,27 @@ macros :: [Macro]
 macros =
   [ mkMacro "(if true then #a else #b)" "#a"
   , mkMacro "(if false then #a else #b)" "#b"
+  , mkMacro "(if #c then #a else #b)" "(if !#c then #a else #b)"
+  , mkMacro "(not true)" "false"
   ]
 
+step :: [Macro] -> Term Void1 -> Maybe (Term Void1)
+step ms t = getFirst $ foldMap (First . attemptMacro ms t) ms
+
+force :: [Macro] -> Term Void1 -> Term Void1
+force ms t = fromMaybe t $ fmap (force ms) $ step ms t
+
+attemptMacro :: [Macro] -> Term Void1 -> Macro -> Maybe (Term Void1)
+attemptMacro ms prog (Macro pattern rewrite) = do
+  bs <- attemptToBind prog pattern
+  pure $ substBindings ms bs rewrite
 
 
-bar :: Either String (Maybe (Term Void1))
+
+bar :: Either String (Term Void1)
 bar = do
-  pattern <- parseOnly parseTerm "(if true then #a else #b)"
-  rewrite <- parseOnly parseTerm "#a"
-  program <- parseOnly parseTerm "(if true then 5 else 6)"
-  let macro = Macro pattern rewrite
-
-  pure $ attemptMacro program macro
+  program <- parseOnly parseTerm "(if (not true) then 5 else 6)"
+  pure $ force macros program
 
 
 -- $> bar
