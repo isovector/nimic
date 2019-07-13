@@ -55,6 +55,10 @@ data Macro
     , macroRewrite :: Term Identity
     }
 
+instance Show Macro where
+  show (Primitive _ _) = "Primitive"
+  show (Macro a b) = "Macro (" ++ show a ++ ") (" ++ show b ++ ")"
+
 type MatchName = Text
 
 data Binding = Binding
@@ -91,7 +95,7 @@ parseGroup = do
 
 
 symbolChar :: Char -> Bool
-symbolChar c = not $ or [ isSpace c, c == '(', c == ')', c == '!']
+symbolChar c = not $ or [ isSpace c, c == '(', c == ')']
 
 parseMatchVariable :: CanParseVar a => Parser (Term a)
 parseMatchVariable = do
@@ -109,7 +113,6 @@ parseTerm :: CanParseVar a => Parser (Term a)
 parseTerm = do
   skipSpace
   choice [ parseGroup
-         , parseStep
          , parseSym
          ]
 
@@ -144,12 +147,13 @@ substBindings bs (MatchVariable (Identity n)) =
     Nothing      -> error "unbound error!"
 substBindings bs (Step (Identity t)) = do
   t' <- substBindings bs t
-  fmap (fromMaybe (error "couldn't step!")) $ step t'
+  ms <- get
+  fmap (fromMaybe (error $ "couldn't step!\n\n" ++ show ms ++ "\n\n\n" ++ show bs ++ "\n\n\n------------>" ++ show t')) $ step t'
 
 
 mkMacro :: Text -> Text -> Macro
 mkMacro ptext rtext =
-  let Right macro = do
+  let macro = either (error . show) id $ do
         pattern <- parseOnly parseTerm ptext
         rewrite <- parseOnly parseTerm rtext
         pure $ Macro (coerceIt pattern) (coerceIt rewrite)
@@ -168,18 +172,27 @@ unsafeGetPrimitiveBinding bs name
   . maybe (error "unsafely") id
   $ find ((== name) . bindingName) bs
 
+unsafeGetPrimitiveBinding' :: [Binding] -> Text -> Term Void1
+unsafeGetPrimitiveBinding' bs name
+  = bindingValue
+  . maybe (error "unsafely2") id
+  $ find ((== name) . bindingName) bs
+
 macros :: [Macro]
 macros =
-  [ Primitive (doAParseJob "(macro #a #b)") (\bs -> do
+  [ Primitive (doAParseJob "((macro #a #b); #c)") (\bs -> do
       let a = unsafeGetPrimitiveBinding bs "#a"
           b = unsafeGetPrimitiveBinding bs "#b"
+          c = unsafeGetPrimitiveBinding' bs "#c"
       modify $ (++ [Macro a b])
-      pure $ Sym "defined"
+      pure $ c
     )
   , mkMacro "(if true then #a else #b)" "#a"
   , mkMacro "(if false then #a else #b)" "#b"
-  , mkMacro "(#a / #b)" "(macro #a #b)"
-  , mkMacro "defined" "david"
+  , mkMacro "((#a / #b); #c)" "((macro #a #b); #c)"
+  , mkMacro "(#a rusu)" "(!#a maguire)"
+  , mkMacro "(#a)" "#a"
+  , mkMacro "defined" "(david rusu)"
   ]
 
 step :: Term Void1 -> State [Macro] (Maybe (Term Void1))
@@ -229,7 +242,7 @@ attemptMacro prog (Macro pattern rewrite) = do
 
 bar :: Either String (Term Void1)
 bar = do
-  program <- parseOnly parseTerm "(david / sandy)"
+  program <- parseOnly parseTerm "((david / sandy); ((done / david); done))"
   pure $ evalState (force program) macros
 
 
