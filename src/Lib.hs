@@ -24,6 +24,7 @@ import           Data.Maybe
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
+import Text.PrettyPrint.HughesPJ hiding (char, empty, ptext)
 
 data Void1 a
   deriving Data
@@ -43,6 +44,17 @@ data Term f
   | MatchVariable (f MatchName)
   -- TODO(sandy): add type safety so this is only on the bottom later!
   | Step (f (Term f))
+
+ppr :: Term Void1 -> Doc
+ppr (Sym t) = text $ T.unpack t
+ppr (a@(Group [_, Sym ";", _])) = braces $ vcat $ punctuate (text ";") $ fmap ppr $ unrollSemis a
+ppr (Group t) = parens $ sep $ fmap ppr t
+ppr (MatchVariable t) = absurd t
+ppr (Step t) = absurd t
+
+unrollSemis :: Term Void1 -> [Term Void1]
+unrollSemis (Group [a, Sym ";", b]) = a : unrollSemis b
+unrollSemis a = [a]
 
 deriving instance (forall x. Eq x => Eq (f x)) => Eq (Term f)
 deriving instance (forall x. Show x => Show (f x)) => Show (Term f)
@@ -265,4 +277,4 @@ bar = do
   pure $ evalState (force program) macros
 
 
--- $> bar
+-- $> ppr bar

@@ -25,6 +25,7 @@ dependencies:
 - text
 - syb
 - mtl
+- pretty
 
 library:
   source-dirs: src

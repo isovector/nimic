@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f4487683c0e4e8740da9deec82715719ba3b9236e46607472097352e07e70858
+-- hash: 6cf57bdf804015d2b58c7719c91de161dfc00b159c144c27cb21a0908edb2a0a
 
 name:           nimic
 version:        0.1.0.0
@@ -36,6 +36,7 @@ library
       attoparsec
     , base >=4.7 && <5
     , mtl
+    , pretty
     , syb
     , text
   default-language: Haskell2010
@@ -52,6 +53,7 @@ executable exe
     , base >=4.7 && <5
     , mtl
     , nimic
+    , pretty
     , syb
     , text
   default-language: Haskell2010
