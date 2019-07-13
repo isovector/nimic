@@ -49,7 +49,7 @@ deriving instance (forall x. Show x => Show (f x)) => Show (Term f)
 deriving instance (forall x. Data x => Data (f x), Typeable f) => Data (Term f)
 
 data Macro
-  = Primitive (Term Void1) ([Binding] -> State [Macro] (Term Void1))
+  = Primitive (Term Identity) ([Binding] -> State [Macro] (Term Void1))
   | Macro
     { macroMatch   :: Term Identity
     , macroRewrite :: Term Identity
@@ -152,20 +152,34 @@ mkMacro ptext rtext =
   let Right macro = do
         pattern <- parseOnly parseTerm ptext
         rewrite <- parseOnly parseTerm rtext
-        pure $ Macro pattern rewrite
+        pure $ Macro (coerceIt pattern) (coerceIt rewrite)
    in macro
+
+doAParseJob :: Text -> Term Identity
+doAParseJob
+  = coerceIt
+  . either (error "shitty code") id
+  . parseOnly parseTerm
+
+unsafeGetPrimitiveBinding :: [Binding] -> Text -> Term Identity
+unsafeGetPrimitiveBinding bs name
+  = coerceIt
+  . bindingValue
+  . maybe (error "unsafely") id
+  $ find ((== name) . bindingName) bs
 
 macros :: [Macro]
 macros =
-  [ mkMacro "(if true then #a else #b)" "#a"
-  , mkMacro "(if false then #a else #b)" "#b"
-  , mkMacro "(if #c then #a else #b)" "(if !#c then #a else #b)"
-  , Primitive (Group [Sym "macro", Sym "#a", Sym "#b"]) (\bs -> do
-      let Just a = find ((== "#a") . bindingName) bs
-          Just b = find ((== "#b") . bindingName) bs
-      modify $ (++ [Macro (coerceIt $ bindingValue a) (coerceIt $ bindingValue b)])
+  [ Primitive (doAParseJob "(macro #a #b)") (\bs -> do
+      let a = unsafeGetPrimitiveBinding bs "#a"
+          b = unsafeGetPrimitiveBinding bs "#b"
+      modify $ (++ [Macro a b])
       pure $ Sym "defined"
     )
+  , mkMacro "(if true then #a else #b)" "#a"
+  , mkMacro "(if false then #a else #b)" "#b"
+  , mkMacro "(#a / #b)" "(macro #a #b)"
+  , mkMacro "defined" "david"
   ]
 
 step :: Term Void1 -> State [Macro] (Maybe (Term Void1))
@@ -198,8 +212,7 @@ coerceIt (Step a)          = absurd a
 
 attemptMacro :: Term Void1 -> Macro -> State [Macro] (Maybe (Term Void1))
 attemptMacro prog (Primitive pattern rewrite) = do
-  let pattern' = coerceIt pattern
-  mbs <- pure $ attemptToBind prog pattern'
+  mbs <- pure $ attemptToBind prog pattern
   case mbs of
     Just bs -> do
       z <- rewrite bs
@@ -216,7 +229,7 @@ attemptMacro prog (Macro pattern rewrite) = do
 
 bar :: Either String (Term Void1)
 bar = do
-  program <- parseOnly parseTerm "(macro defined finished)"
+  program <- parseOnly parseTerm "(david / sandy)"
   pure $ evalState (force program) macros
 
 
