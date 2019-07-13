@@ -11,6 +11,6 @@ main = do
   [filepath] <- getArgs
   contents <- T.readFile filepath
   print $ do
-    program <- parseOnly parseTerm contents
+    program <- parseOnly parseImplicitGroup contents
     pure $ evalState (force program) macros
 

@@ -94,10 +94,22 @@ parseGroup = do
   _ <- char ')'
   pure $ Group subTerm
 
+parseImplicitGroup :: CanParseVar a => Parser (Term a)
+parseImplicitGroup = do
+  subTerm <- some $ do
+    skipSpace
+    c <- peekChar
+    case c of
+      Just ';' -> empty
+      _ -> parseTerm
+  pure $ case subTerm of
+    [a] -> a
+    _   -> Group subTerm
+
 parseCommaSep :: CanParseVar a => Parser (Term a)
 parseCommaSep = do
   _ <- char '{'
-  subTerm <- sepBy parseTerm (skipSpace >> char ';')
+  subTerm <- sepBy parseImplicitGroup (skipSpace >> char ';')
   skipSpace
   _ <- char '}'
   pure $ foldr1 (\a b -> Group [ a, Sym ";", b ]) subTerm
