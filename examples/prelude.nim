@@ -1,42 +1,17 @@
 (rassoc 1 ;)
-;
-( macro
+; ( macro (#a ; #b) #b
+; macro
   ( #a
     ----------
     #b
-
-  ; #r
   )
-
-  ( macro #a #b
-  ; #r
-  )
+  (macro #a #b)
 
 ; rassoc 3 //
-; ( // #a ; #r )
-  ----------
-  #r
 
-; ( (#a) ; #b )
+; (import #file)
   ----------
-  ( #a ; #b )
-
-; ( (#a ; #b) ; #c )
-  ----------
-  ( #a ; #b ; #c )
-
-; ( (bash #foo); #r )
-  ----------
-  ( !(bash #foo); #r )
-
-; ( (import #file); #r )
-  ----------
-  ( bash (cat #file); #r )
-
-; ( ; #r )
-  ----------
-  #r
-
-; // (a macro won't get forced if it's the last statement)
+  (bash (cat #file))
+; // a macro won't get forced if it's the last statement
 )
 

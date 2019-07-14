@@ -36,6 +36,7 @@ import           Parser
 import           System.IO.Unsafe
 import           System.Process
 import           Types
+import qualified Text.PrettyPrint.HughesPJ as PP
 
 
 attemptToBind :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity -> Maybe [Binding]
@@ -120,9 +121,11 @@ macros =
   , Primitive (doAParseJob "(bash #cmd)") $ \bs -> do
       let cmdTerm = unsafeGetPrimitiveBinding' bs "#cmd"
           (shellCmd :: String) = T.unpack $ termToShell cmdTerm
-          !_ = unsafePerformIO $ putStrLn shellCmd
-          stdout = T.pack $ "{ bash-stdout ; " <> (unsafePerformIO $ readCreateProcess (shell shellCmd) "") <> " }"
+          -- !_ = unsafePerformIO $ putStrLn shellCmd
+          stdout = T.pack $ unsafePerformIO $ readCreateProcess (shell shellCmd) ""
+          -- !_ = unsafePerformIO $ putStrLn $ T.unpack stdout
           shellTerm = either (error $ "***Shell parse*** " <> T.unpack stdout) id . parseOnly parseImplicitGroup $ stdout
+          -- !_ = unsafePerformIO $ putStrLn $ PP.render $ ppr shellTerm
       pure shellTerm
   ]
 
@@ -155,27 +158,33 @@ foldStepParser _ [] = []
 foldStepParser reassoc (Sym "!" : a : as) = Step (Identity $ coerceIt reassoc a) : foldStepParser reassoc as
 foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
 
-
 doAttemptMacro :: Term Void1 -> Macro -> App (Term Void1 -> Term Void1, Maybe [Binding])
 doAttemptMacro a b = do
   reassoc <- gets $ getAssocs . ctxReassocs
   fmap ((reassoc, ) . fmap snd) $ attemptMacro reassoc a b
 
 attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, [Binding]))
-attemptMacro reassoc prog (Primitive pattern rewrite) = do
+attemptMacro reassoc t@(Group (first:rest)) macro = do
+  mTerm <- attemptMacro reassoc first macro
+  case mTerm of
+    Just (rewrittenFirst, bindings) -> pure $ Just ((Group (rewrittenFirst:rest)), bindings)
+    Nothing -> attemptMacro' reassoc t macro
+attemptMacro r t m = attemptMacro' r t m
+
+attemptMacro' :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, [Binding]))
+attemptMacro' reassoc prog (Primitive pattern rewrite) = do
   mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
     Just bs -> do
       z <- rewrite bs
       pure $ Just (z, bs)
     Nothing -> pure Nothing
-attemptMacro reassoc prog (Macro pattern rewrite) = do
+
+attemptMacro' reassoc prog (Macro pattern rewrite) = do
   mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
     Just bs -> fmap (Just . (, bs)) $ substBindings bs rewrite
     Nothing -> pure Nothing
-
-
 
 mkAssoc :: AssocLevel -> (Term Void1 -> Term Void1) -> App ()
 mkAssoc l f = modify $ \s ->
