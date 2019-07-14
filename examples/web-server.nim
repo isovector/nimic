@@ -1,10 +1,10 @@
-; http-200
+; (http-200)
   ----------
-  'HTTP/1.1 200 OK\r\n'
+  ('HTTP/1.1 200 OK\r\n')
 
-; web #resp
+; (web #resp)
   ----------
-  ( discard (bash (echo !http-200 ' #resp ' | nc -l 9090))
+  (bash (echo !(http-200) ' #resp ' | nc -l 9090)
   ; web #resp
   )
 

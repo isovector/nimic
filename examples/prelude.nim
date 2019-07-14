@@ -1,6 +1,5 @@
 (macro (#a ; #b) #b)
 ; ((rassoc 1 ;)
-; (
 ; macro
   ( #a
     ----------
@@ -17,4 +16,3 @@
 
 ; import examples/math.nim
 ))
-

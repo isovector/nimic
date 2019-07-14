@@ -1,3 +1,9 @@
+- make force be steppable 
+- if you ommit a paran, the parser sometimes drops a term ie.
+; even? #n <=> ::even? !(math (#n % 2)
+will parse to
+(even? #n <=>)
+
 ```
 (if true then [b] else [c]); [rest]
 -----------------------------------
