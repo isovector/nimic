@@ -10,6 +10,10 @@
   ; #r
   }
 
+; { // #a ; #r }
+  ----------
+  #r
+
 ; { (#a) ; #b }
   ----------
   { #a ; #b }
@@ -26,10 +30,6 @@
   ----------
   { bash (cat #file); #r }
 
-; { loaded ; #r }
-  ----------
-  { #r }
-
-; loaded
+; // (a macro won't get forced if it's the last statement)
 }
 
