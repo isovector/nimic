@@ -8,11 +8,12 @@
   )
   (macro #a #b)
 
+; rassoc 2 ----------
 ; rassoc 3 //
 
-; (import #file)
+; import #file
   ----------
-  (bash (cat #file))
+  bash (cat #file)
 
 ; import examples/math.nim
 ))

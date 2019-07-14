@@ -1,15 +1,39 @@
-; import examples/math.nim
-; rassoc 2 ----------
-; fix #a
-  ----------
-  #a (fix #a)
+; rassoc 4 ->
+; rassoc 4 =
 
-; let (#a = #b)
+; // lambda elimination
+; (λ #x -> #f) #a
   ----------
-  #a
+  !(replace #f #x #a)
+; (λ #x #y -> #f) #a #b
   ----------
-  #b
-; let (hello = (math (1 + 5)))
-; // hello world this is sandy speaking
-; hello
-; done
+  !(replace !(replace #f #y !#b) #x !#a)
+; (λ #x #y #z -> #f) #a #b #c
+  ----------
+  !(replace !(replace !(replace #f #z !#c) #y !#b) #x !#a)
+; (λ #x #y #z #w -> #f) #a #b #c #d
+  ----------
+  !(replace !(replace !(replace !(replace #f #w !#d) #z !#c) #y !#b) #x !#a)
+
+; // function introduction
+; #fn #x = #body
+  ----------
+  #fn
+  ----------
+  (λ #x -> #body)
+; #fn #x #y = #body
+  ----------
+  #fn
+  ----------
+  (λ #x #y -> #body)
+; #fn #x #y #z = #body
+  ----------
+  #fn
+  ----------
+  (λ #x #y #z -> #body)
+; #fn #x #y #z #w = #body
+  ----------
+  #fn
+  ----------
+  (λ #x #y #z #w -> #body)
+
