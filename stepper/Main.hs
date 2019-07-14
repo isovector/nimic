@@ -31,6 +31,7 @@ import qualified Text.PrettyPrint.HughesPJ as PP
 import           Types
 import           Data.Attoparsec.Text
 
+
 goPrev :: StepCtx -> StepCtx
 goPrev a@(StepCtx prog) =
   case previous prog of
@@ -60,12 +61,29 @@ data St = St
 drawUi :: StepCtx -> [Widget ()]
 drawUi st =
     [ withBorderStyle unicode $
-        borderWithLabel (str "Hello!") $
-          leftPane st
+        borderWithLabel (str "The Glorious Nimic Stepper") $
+          termPane st
+          <+> vBorder
+          <+> macroPane st
     ]
 
-leftPane :: StepCtx -> Widget ()
-leftPane st = str $ PP.render $ ppr $ fst $ _focus $ stepProgram st
+termPane :: StepCtx -> Widget ()
+termPane st = padAll 2 $ str $ PP.render $ ppr $ fst $ _focus $ stepProgram st
+
+isDefMacro :: Macro -> Bool
+isDefMacro (Macro _ _) = True
+isDefMacro _ = False
+
+macroPane :: StepCtx -> Widget ()
+macroPane
+  = padAll 2
+  . vBox
+  . fmap (\(Macro a b) -> str . PP.render $ pprId a)
+  . filter isDefMacro
+  . ctxDefMacros
+  . snd
+  . _focus
+  . stepProgram
 
 appEvent :: StepCtx -> T.BrickEvent () e -> T.EventM () (T.Next StepCtx)
 appEvent st (T.VtyEvent (V.EvKey V.KLeft []))  =
@@ -73,7 +91,8 @@ appEvent st (T.VtyEvent (V.EvKey V.KLeft []))  =
 appEvent st (T.VtyEvent (V.EvKey V.KRight []))  =
     M.continue $ goNext st
 
--- appEvent st (T.VtyEvent (V.EvKey V.QKey [])) = M.halt st
+appEvent st (T.VtyEvent (V.EvKey (V.KChar 'c') [V.MCtrl])) = M.halt st
+appEvent st (T.VtyEvent (V.EvKey (V.KChar 'q') [])) = M.halt st
 appEvent st (T.VtyEvent (V.EvKey V.KEsc [])) = M.halt st
 appEvent st _ = M.continue st
 
@@ -103,3 +122,4 @@ main = do
       putStrLn err
     Right z -> do
       void $ M.defaultMain app $ StepCtx $ singleton $ z
+

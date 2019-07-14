@@ -29,6 +29,12 @@ unrollSemis :: Term Void1 -> [Term Void1]
 unrollSemis (Group [a, Sym ";", b]) = a : unrollSemis b
 unrollSemis a = [a]
 
+pprId :: Term Identity -> Doc
+pprId (Sym t) = text $ T.unpack t
+pprId (Group t) = parens $ sep $ fmap pprId t
+pprId (MatchVariable (Identity t)) = text $ T.unpack t
+pprId (Step (Identity t)) = text "!" <> pprId t
+
 
 data Void1 a
   deriving Data
