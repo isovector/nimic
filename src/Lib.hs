@@ -27,14 +27,12 @@ import           Data.Functor.Identity
 import           Data.Generics hiding (empty)
 import           Data.Generics.Product
 import           Data.List (find)
-import           Data.Maybe
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Traversable
 import           Lens.Micro
 import           Parser
-import           System.IO.Unsafe
 import           System.Process
 import           Types
 
@@ -65,7 +63,6 @@ substBindings bs (MatchVariable (Identity n)) =
     Nothing      -> pure $ Sym n
 substBindings bs (Step (Identity t)) = do
   t' <- substBindings bs t
-  ms <- gets ctxDefMacros
   force t'
 
 doAParseJob :: Text -> Term Identity
@@ -118,12 +115,9 @@ macros =
   , Primitive (doAParseJob "(bash #cmd)") $ \bs -> do
       let cmdTerm = unsafeGetPrimitiveBinding' bs "#cmd"
           (shellCmd :: String) = T.unpack $ termToShell cmdTerm
-          -- !_ = unsafePerformIO $ putStrLn shellCmd
-          stdout = T.pack $ unsafePerformIO $ readCreateProcess (shell shellCmd) ""
-          -- !_ = unsafePerformIO $ putStrLn $ T.unpack stdout
-          shellTerm = either (error $ "***Shell parse*** " <> T.unpack stdout) id . parseOnly parseImplicitGroup $ stdout
-          -- !_ = unsafePerformIO $ putStrLn $ PP.render $ ppr shellTerm
-      pure shellTerm
+
+      stdout <- lift $ fmap T.pack $ readCreateProcess (shell shellCmd) ""
+      pure $ either (error $ "***Shell parse*** " <> T.unpack stdout) id . parseOnly parseImplicitGroup $ stdout
   ]
 
 doStep :: Term Void1 -> App (Maybe (Term Void1 -> Term Void1, (Macro, [Binding])))

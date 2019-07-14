@@ -14,7 +14,7 @@ import qualified Brick.Types as T
 import           Brick.Widgets.Border
 import           Brick.Widgets.Border.Style
 import           Control.Monad (void, join)
-import           Control.Monad.State (runState, evalState)
+import           Control.Monad.State (runStateT, evalStateT)
 import           Data.Attoparsec.Text
 import           Data.List.PointedList
 import           Data.Maybe (maybeToList)
@@ -26,6 +26,7 @@ import qualified Graphics.Vty as V
 import           Lib
 import           Parser
 import           System.Environment
+import           System.IO.Unsafe
 import qualified Text.PrettyPrint.HughesPJ as PP
 import           Types
 
@@ -42,7 +43,7 @@ goNext (StepCtx prog) =
     Just z -> StepCtx z
     Nothing -> StepCtx $ flip insertRight prog $ do
       let (t, c) = _focus prog
-          (mt, c') = runState (step t) c
+          (mt, c') = unsafePerformIO $ runStateT (step t) c
        in case mt of
             Just t' -> (fst t', c')
             Nothing -> error "stuck!"
@@ -76,7 +77,7 @@ resetColor :: String
 resetColor = "\x1b[0m"
 
 runApp :: StepCtx -> App a -> a
-runApp ctx ma = evalState ma $ snd $ _focus $ stepProgram ctx
+runApp ctx ma = unsafePerformIO $ evalStateT ma $ snd $ _focus $ stepProgram ctx
 
 data StepCtx = StepCtx
   { stepProgram :: PointedList (Term Void1, NimicCtx)
@@ -180,16 +181,15 @@ main = do
   [filepath] <- getArgs
   prelcont <- T.readFile "examples/prelude.nim"
   progcont <- T.readFile filepath
-  let res = do
-        prelude <- parseOnly parseImplicitGroup prelcont
-        program <- parseOnly parseImplicitGroup progcont
-        pure $ flip runState (NimicCtx macros mempty) $ do
-          ran_prelude <- force prelude
-          pure $ Group [ ran_prelude, Sym ";",  program ]
+  let res = (,) <$> parseOnly parseImplicitGroup prelcont
+                <*> parseOnly parseImplicitGroup progcont
+
   case res of
     Left err -> do
       putStrLn "nimic parse error:"
       putStrLn err
-    Right z -> do
+    Right (prel, prog) -> do
+      z <- flip runStateT (NimicCtx macros mempty) $ do
+        ran_prelude <- force prel
+        pure $ Group [ ran_prelude, Sym ";",  prog ]
       void $ M.defaultMain app $ StepCtx $ singleton $ z
-

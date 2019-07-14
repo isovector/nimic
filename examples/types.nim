@@ -14,6 +14,9 @@
 ; True  : Bool
 ; False : Bool
 
+; [#a] is a type
+; [] : [#a]
+
 ; #a = #b
   ----------
   #a

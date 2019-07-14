@@ -67,7 +67,7 @@ deriving instance (forall x. Eq x => Eq (f x)) => Eq (Term f)
 deriving instance (forall x. Show x => Show (f x)) => Show (Term f)
 deriving instance (forall x. Data x => Data (f x), Typeable f) => Data (Term f)
 
-type App = State NimicCtx
+type App = StateT NimicCtx IO
 
 data Macro
   = Primitive
