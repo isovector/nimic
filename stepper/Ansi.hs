@@ -61,6 +61,7 @@ codeMap =
   , (35, Endo (`withForeColor` magenta))
   , (36, Endo (`withForeColor` cyan))
   , (37, Endo (`withForeColor` white))
+  , (45, Endo (`withStyle` reverseVideo))
   ]
 
 -- | Lookup a code in 'codeMap' and return @`Endo` `id`@ if it's not present

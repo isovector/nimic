@@ -69,7 +69,7 @@ bindingColors =
   , "\x1b[34m"
   , "\x1b[35m"
   , "\x1b[32m"
-  , "\x1b[35;1m"
+  , "\x1b[45m"
   ]
 
 resetColor :: String
