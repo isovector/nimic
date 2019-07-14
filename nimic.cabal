@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4a2aaca181449156156cd5bff1dbc97c9d6b5ec8299f924c39e18f3031f58b0a
+-- hash: 746de0f986f3d179654857e9222a1a29491ed289274f97dc24aae5d21893f671
 
 name:           nimic
 version:        0.1.0.0
@@ -37,13 +37,16 @@ library
   build-depends:
       attoparsec
     , base >=4.7 && <5
+    , brick
     , generic-lens
     , microlens
     , mtl
+    , pointedlist
     , pretty
     , process
     , syb
     , text
+    , vty
   default-language: Haskell2010
 
 executable exe
@@ -56,12 +59,38 @@ executable exe
   build-depends:
       attoparsec
     , base >=4.7 && <5
+    , brick
     , generic-lens
     , microlens
     , mtl
     , nimic
+    , pointedlist
     , pretty
     , process
     , syb
     , text
+    , vty
+  default-language: Haskell2010
+
+executable stepper
+  main-is: Main.hs
+  other-modules:
+      Paths_nimic
+  hs-source-dirs:
+      stepper
+  ghc-options: -threaded -rtsopts -with-rtsopts=-N
+  build-depends:
+      attoparsec
+    , base >=4.7 && <5
+    , brick
+    , generic-lens
+    , microlens
+    , mtl
+    , nimic
+    , pointedlist
+    , pretty
+    , process
+    , syb
+    , text
+    , vty
   default-language: Haskell2010

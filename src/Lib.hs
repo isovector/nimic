@@ -18,21 +18,19 @@
 
 module Lib where
 
-import           Text.PrettyPrint.HughesPJ (render)
-import Debug.Trace
-import Data.Generics.Product
-import Lens.Micro
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Attoparsec.Text
 import           Data.Functor.Identity
 import           Data.Generics hiding (empty)
+import           Data.Generics.Product
 import           Data.List (find)
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
 import           Data.Traversable
+import           Lens.Micro
 import           Parser
 import           System.IO.Unsafe
 import           System.Process
@@ -62,7 +60,7 @@ substBindings bs (Group s) = fmap Group $ traverse (substBindings bs) s
 substBindings bs (MatchVariable (Identity n)) =
   case find ((== n) . bindingName) bs of
     Just binding -> pure $ bindingValue binding
-    Nothing      -> error $ "unbound error! binding not found " <> T.unpack n
+    Nothing      -> pure $ Sym n
 substBindings bs (Step (Identity t)) = do
   t' <- substBindings bs t
   ms <- gets ctxDefMacros
@@ -142,16 +140,17 @@ force t = do
     Just t' -> force t'
 
 coerceIt :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity
-coerceIt reassoc (reassoc -> Sym s) | T.isPrefixOf "#" s = MatchVariable $ Identity s
-                         | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
-                         | T.isPrefixOf "!" s = Step $ Identity $ Sym $ T.drop 1 s
-                         | otherwise = Sym s
+coerceIt reassoc (reassoc -> Sym s)
+  | T.isPrefixOf "#" s  = MatchVariable $ Identity s
+  | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
+  | T.isPrefixOf "!" s = Step $ Identity $ Sym $ T.drop 1 s
+  | otherwise           = Sym s
 coerceIt reassoc (reassoc -> Group g)         = Group $ foldStepParser reassoc g
 coerceIt reassoc (reassoc -> MatchVariable a) = absurd a
 coerceIt reassoc (reassoc -> Step a)          = absurd a
 
 foldStepParser :: (Term Void1 -> Term Void1) -> [Term Void1] -> [Term Identity]
-foldStepParser reassoc [] = []
+foldStepParser _ [] = []
 foldStepParser reassoc (Sym "!" : a : as) = Step (Identity $ coerceIt reassoc a) : foldStepParser reassoc as
 foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
 
@@ -206,4 +205,3 @@ groupIfNotSingleton a = Group a
 
 getAssocs :: (AssocLevel -> Endo (Term Void1)) -> Term Void1 -> Term Void1
 getAssocs f = appEndo $ foldMap f $ reverse [minBound .. maxBound]
-
