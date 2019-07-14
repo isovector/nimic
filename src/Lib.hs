@@ -13,22 +13,22 @@
 
 module Lib where
 
-import Data.Generics hiding (empty)
-import Data.Traversable
 import           Control.Applicative
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Attoparsec.Text
 import           Data.Char
 import           Data.Functor.Identity
+import           Data.Generics hiding (empty)
 import           Data.List (find)
 import           Data.Maybe
 import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
-import Text.PrettyPrint.HughesPJ hiding (char, empty, ptext, (<>))
-import System.Process
-import System.IO.Unsafe
+import           Data.Traversable
+import           System.IO.Unsafe
+import           System.Process
+import           Text.PrettyPrint.HughesPJ hiding (char, empty, ptext, (<>))
 
 data Void1 a
   deriving Data
@@ -149,7 +149,7 @@ parseMatchVariable = do
 parseStep :: CanParseVar a => Parser (Term a)
 parseStep = do
   _ <- char '!'
-  v <- parseMatchVariable
+  v <- parseTerm
   pure $ Step $ introduce v
 
 parseTerm :: CanParseVar a => Parser (Term a)
@@ -201,14 +201,6 @@ substBindings bs (Step (Identity t)) = do
   fmap (fromMaybe (error $ "couldn't step!\n\n" ++ show ms ++ "\n\n\n" ++ show bs ++ "\n\n\n------------>" ++ show t')) $ step t'
 
 
-mkMacro :: Text -> Text -> Macro
-mkMacro ptext rtext =
-  let macro = either (error . show) id $ do
-        pattern <- parseOnly parseTerm ptext
-        rewrite <- parseOnly parseTerm rtext
-        pure $ Macro (coerceIt pattern) (coerceIt rewrite)
-   in macro
-
 doAParseJob :: Text -> Term Identity
 doAParseJob
   = coerceIt
@@ -217,10 +209,7 @@ doAParseJob
 
 unsafeGetPrimitiveBinding :: [Binding] -> Text -> Term Identity
 unsafeGetPrimitiveBinding bs name
-  = coerceIt
-  . bindingValue
-  . maybe (error "unsafely") id
-  $ find ((== name) . bindingName) bs
+  = coerceIt $ unsafeGetPrimitiveBinding' bs name
 
 unsafeGetPrimitiveBinding' :: [Binding] -> Text -> Term Void1
 unsafeGetPrimitiveBinding' bs name
@@ -241,11 +230,13 @@ macros =
           c = unsafeGetPrimitiveBinding' bs "#c"
       modify $ (Macro a b :)
       pure c
+
   , Primitive (doAParseJob "(replace #a #b #c)") $ \bs -> do
       let a = unsafeGetPrimitiveBinding bs "#a"
           Sym b = unsafeGetPrimitiveBinding' bs "#b"
           c = unsafeGetPrimitiveBinding' bs "#c"
       substBindings [Binding b c] $ substTerm (Sym b) (MatchVariable (Identity b)) a
+
   , Primitive (doAParseJob "(bash #cmd)") $ \bs -> do
       let cmdTerm = unsafeGetPrimitiveBinding' bs "#cmd"
           (shellCmd :: String) = T.unpack $ termToShell cmdTerm
@@ -275,9 +266,15 @@ coerceIt :: Term Void1 -> Term Identity
 coerceIt (Sym s) | T.isPrefixOf "#" s = MatchVariable $ Identity s
                  | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
                  | otherwise = Sym s
-coerceIt (Group g)         = Group $ fmap coerceIt g
+coerceIt (Group g)         = Group $ foldStepParser g
 coerceIt (MatchVariable a) = absurd a
 coerceIt (Step a)          = absurd a
+
+
+foldStepParser :: [Term Void1] -> [Term Identity]
+foldStepParser [] = []
+foldStepParser (Sym "!" : a : as) = Step (Identity $ coerceIt a) : foldStepParser as
+foldStepParser (a : as) = coerceIt a : foldStepParser as
 
 
 attemptMacro :: Term Void1 -> Macro -> State [Macro] (Maybe (Term Void1))

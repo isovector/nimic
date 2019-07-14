@@ -9,13 +9,26 @@
         ; #r
         }
 
-; (#a #b)
+; { (#a) ; #b }
   ----------
-  (!#a #b)
+  { #a ; #b }
 
-; ((λ #a . #c) #b)
+; { {#a ; #b} ; #c }
   ----------
-  (replace #c #a #b)
+  { #a ; #b ; #c }
 
-; ((λ y . (λ x . (x + y))) 5) 6
+; { (bash #foo); #r }
+  ----------
+  { !(bash #foo); #r }
+
+; { (import #file); #r }
+  ----------
+  { bash (cat #file); #r }
+
+; import examples/math.nim
+
+; math (5 + 6)
+
+; done
+
 }
