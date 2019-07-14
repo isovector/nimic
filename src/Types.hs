@@ -5,6 +5,7 @@
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE UndecidableInstances  #-}
+{-# LANGUAGE ViewPatterns          #-}
 {-# OPTIONS_GHC -Wall              #-}
 
 module Types where
@@ -19,11 +20,17 @@ import qualified GHC.Generics as GG
 import           Text.PrettyPrint.HughesPJ hiding (char, empty, ptext, (<>))
 
 ppr :: Term Void1 -> Doc
-ppr (Sym t) = text $ T.unpack t
-ppr (a@(Group [_, Sym ";", _])) = braces $ vcat $ punctuate (text ";") $ fmap ppr $ unrollSemis a
-ppr (Group t) = parens $ sep $ fmap ppr t
-ppr (MatchVariable t) = absurd t
-ppr (Step t) = absurd t
+ppr = pprRaw (const id)
+
+rewritePpr :: (Term Void1 -> Doc -> Doc) -> Term Void1 -> Doc -> Doc
+rewritePpr = id
+
+pprRaw :: (Term Void1 -> Doc -> Doc) -> Term Void1 -> Doc
+pprRaw f d@(Sym t) = f d $ text $ T.unpack t
+-- pprRaw f d@(a@(Group [_, Sym ";", _])) = f d $ braces $ vcat $ punctuate (text ";") $ fmap (pprRaw f) $ unrollSemis a
+pprRaw f d@(Group t) = f d $ parens $ sep $ fmap (pprRaw f) t
+pprRaw _ (MatchVariable t) = absurd t
+pprRaw _ (Step t) = absurd t
 
 unrollSemis :: Term Void1 -> [Term Void1]
 unrollSemis (Group [a, Sym ";", b]) = a : unrollSemis b

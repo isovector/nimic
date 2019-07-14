@@ -156,10 +156,10 @@ foldStepParser reassoc (Sym "!" : a : as) = Step (Identity $ coerceIt reassoc a)
 foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
 
 
-doAttemptMacro :: Term Void1 -> Macro -> App [Binding]
+doAttemptMacro :: Term Void1 -> Macro -> App (Term Void1 -> Term Void1, Maybe [Binding])
 doAttemptMacro a b = do
   reassoc <- gets $ getAssocs . ctxReassocs
-  fmap (join . maybeToList . fmap snd) $ attemptMacro reassoc a b
+  fmap ((reassoc, ) . fmap snd) $ attemptMacro reassoc a b
 
 attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, [Binding]))
 attemptMacro reassoc prog (Primitive pattern rewrite) = do

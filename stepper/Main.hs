@@ -1,6 +1,7 @@
 {-# LANGUAGE DataKinds         #-}
 {-# LANGUAGE DeriveGeneric     #-}
 {-# LANGUAGE OverloadedStrings #-}
+{-# LANGUAGE TupleSections     #-}
 {-# LANGUAGE TypeApplications  #-}
 
 module Main where
@@ -9,27 +10,19 @@ import           Ansi
 import           Brick hiding (App)
 import           Brick.AttrMap (attrMap)
 import qualified Brick.Main as M
-import           Brick.Types (locationRowL, locationColumnL, Widget)
 import qualified Brick.Types as T
 import           Brick.Widgets.Border
-import qualified Brick.Widgets.Border as B
 import           Brick.Widgets.Border.Style
-import           Brick.Widgets.Center
-import qualified Brick.Widgets.Center as C
-import           Brick.Widgets.Core (translateBy, str)
-import           Control.Monad (void)
+import           Control.Monad (void, join)
 import           Control.Monad.State (runState, evalState)
 import           Data.Attoparsec.Text
-import           Data.Bool
-import           Data.Generics.Product
 import           Data.List.PointedList
 import           Data.Maybe (maybeToList)
-import           Data.Monoid (Endo (..))
+import           Data.Monoid (Endo (..), First (..))
 import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           GHC.Generics
 import qualified Graphics.Vty as V
-import           Lens.Micro ((^.), (&), (%~))
 import           Lib
 import           Parser
 import           System.Environment
@@ -61,6 +54,13 @@ bindingsToColors bs = appEndo $ flip foldMap (zip bs bindingColors) $ \(Binding 
        then color ++ v ++ resetColor
        else v
 
+bindingsToTreeColors :: [Binding] -> Term Void1 -> PP.Doc -> PP.Doc
+bindingsToTreeColors bs t = appEndo $ flip foldMap (zip bs bindingColors) $ \(Binding _ p, color) ->
+  Endo $ \d ->
+    if t == p
+       then PP.zeroWidthText color <> d <> PP.zeroWidthText resetColor
+       else d
+
 bindingColors :: [String]
 bindingColors =
   [ "\x1b[31m"
@@ -88,15 +88,16 @@ data St = St
 
 drawUi :: StepCtx -> [Widget ()]
 drawUi st =
-    [ withBorderStyle unicode $
-        borderWithLabel (str "The Glorious Nimic Stepper") $
-          termPane st
-          <+> vBorder
-          <+> macroPane st
+    [ let (d, macros) = macroPane st
+       in withBorderStyle unicode $
+            borderWithLabel (str "The Glorious Nimic Stepper") $
+              termPane d st
+              <+> vBorder
+              <+> macros
     ]
 
-termPane :: StepCtx -> Widget ()
-termPane
+termPane :: Maybe (Term Void1 -> Term Void1, [Binding]) -> StepCtx -> Widget ()
+termPane Nothing
   = padRight Max
   . padAll 2
   . str
@@ -105,20 +106,32 @@ termPane
   . fst
   . _focus
   . stepProgram
+termPane (Just (reassoc, bs))
+  = padRight Max
+  . padAll 2
+  . raw
+  . ansiImage
+  . T.pack
+  . PP.render
+  . pprRaw (bindingsToTreeColors bs)
+  . fst
+  . _focus
+  . stepProgram
 
 isDefMacro :: Macro -> Bool
 isDefMacro (Macro _ _) = True
 isDefMacro _ = False
 
-macroPane :: StepCtx -> Widget ()
+macroPane :: StepCtx -> (Maybe (Term Void1 -> Term Void1, [Binding]), Widget ())
 macroPane ctx@(StepCtx p) =
-  let ms = ctxDefMacros . snd $ _focus p
+  let ms = filter isDefMacro . ctxDefMacros . snd $ _focus p
       t = fst $ _focus p
-      macroMatches m = bindingsToColors $ runApp ctx $ doAttemptMacro t m
-   in padAll 2
+      macroMatches m = bindingsToColors $ join $ maybeToList $ snd $ runApp ctx $ doAttemptMacro t m
+      firstMacro = getFirst $ foldMap (First . sequenceA . runApp ctx . doAttemptMacro t) $ ms
+   in (firstMacro, )
+    . padAll 2
     . vBox
     . fmap (\m@(Macro a b) -> raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) a)
-    . filter isDefMacro
     $ ms
 
 ansiImage :: T.Text -> V.Image

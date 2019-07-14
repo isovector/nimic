@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 746de0f986f3d179654857e9222a1a29491ed289274f97dc24aae5d21893f671
+-- hash: 3c8fac407e6ee091a1f0d863836191a91e050b339715d742a40766526ff965b5
 
 name:           nimic
 version:        0.1.0.0
@@ -75,6 +75,7 @@ executable exe
 executable stepper
   main-is: Main.hs
   other-modules:
+      Ansi
       Paths_nimic
   hs-source-dirs:
       stepper
