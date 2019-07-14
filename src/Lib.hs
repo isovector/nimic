@@ -130,7 +130,14 @@ macros =
   ]
 
 step :: Term Void1 -> App (Maybe (Term Void1))
-step t = do
+step g@(Group (first:rest)) = do
+  mTerm <- step first
+  case mTerm of
+    Just t -> pure $ Just (Group (t:rest))
+    Nothing -> step' g
+step t = step' t
+
+step' t = do
   reassoc <- gets $ getAssocs . ctxReassocs
   ms <- gets ctxDefMacros
   z <- for ms $ \m -> fmap (fmap fst) $ attemptMacro reassoc t m
@@ -164,15 +171,7 @@ doAttemptMacro a b = do
   fmap ((reassoc, ) . fmap snd) $ attemptMacro reassoc a b
 
 attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, [Binding]))
-attemptMacro reassoc t@(Group (first:rest)) macro = do
-  mTerm <- attemptMacro reassoc first macro
-  case mTerm of
-    Just (rewrittenFirst, bindings) -> pure $ Just ((Group (rewrittenFirst:rest)), bindings)
-    Nothing -> attemptMacro' reassoc t macro
-attemptMacro r t m = attemptMacro' r t m
-
-attemptMacro' :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, [Binding]))
-attemptMacro' reassoc prog (Primitive pattern rewrite) = do
+attemptMacro reassoc prog (Primitive pattern rewrite) = do
   mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
     Just bs -> do
@@ -180,7 +179,7 @@ attemptMacro' reassoc prog (Primitive pattern rewrite) = do
       pure $ Just (z, bs)
     Nothing -> pure Nothing
 
-attemptMacro' reassoc prog (Macro pattern rewrite) = do
+attemptMacro reassoc prog (Macro pattern rewrite) = do
   mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
     Just bs -> fmap (Just . (, bs)) $ substBindings bs rewrite
