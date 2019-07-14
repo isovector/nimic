@@ -69,14 +69,16 @@ substBindings bs (Step (Identity t)) = do
 
 doAParseJob :: Text -> Term Identity
 doAParseJob
-  = coerceIt
+  = coerceIt id
   . either (error "shitty code") id
   . parseOnly parseTerm
 
 
-unsafeGetPrimitiveBinding :: [Binding] -> Text -> Term Identity
-unsafeGetPrimitiveBinding bs name
-  = coerceIt $ unsafeGetPrimitiveBinding' bs name
+unsafeGetPrimitiveBinding :: [Binding] -> Text -> App (Term Identity)
+unsafeGetPrimitiveBinding bs name = do
+  let z = unsafeGetPrimitiveBinding' bs name
+  reassoc <- gets $ getAssocs . ctxReassocs
+  pure $ coerceIt reassoc z
 
 
 unsafeGetPrimitiveBinding' :: [Binding] -> Text -> Term Void1
@@ -95,15 +97,15 @@ termToShell o = T.pack $ "echo 'what the heck are you doing" <> show o <> "'"
 macros :: [Macro]
 macros =
   [ Primitive (doAParseJob "((macro #a #b); #c)") $ \bs -> do
-      let a = unsafeGetPrimitiveBinding bs "#a"
-          b = unsafeGetPrimitiveBinding bs "#b"
-          c = unsafeGetPrimitiveBinding' bs "#c"
+      a <- unsafeGetPrimitiveBinding bs "#a"
+      b <- unsafeGetPrimitiveBinding bs "#b"
+      let c = unsafeGetPrimitiveBinding' bs "#c"
       modify $ field @"ctxDefMacros" %~ (Macro a b :)
       pure c
 
   , Primitive (doAParseJob "(replace #a #b #c)") $ \bs -> do
-      let a = unsafeGetPrimitiveBinding bs "#a"
-          Sym b = unsafeGetPrimitiveBinding' bs "#b"
+      a <-  unsafeGetPrimitiveBinding bs "#a"
+      let Sym b = unsafeGetPrimitiveBinding' bs "#b"
           c = unsafeGetPrimitiveBinding' bs "#c"
       substBindings [Binding b c] $ substTerm (Sym b) (MatchVariable (Identity b)) a
 
@@ -137,19 +139,19 @@ force t = do
     Just t' -> force t'
 
 
-coerceIt :: Term Void1 -> Term Identity
-coerceIt (Sym s) | T.isPrefixOf "#" s = MatchVariable $ Identity s
-                 | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
-                 | otherwise = Sym s
-coerceIt (Group g)         = Group $ foldStepParser g
-coerceIt (MatchVariable a) = absurd a
-coerceIt (Step a)          = absurd a
+coerceIt :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity
+coerceIt reassoc (reassoc -> Sym s) | T.isPrefixOf "#" s = MatchVariable $ Identity s
+                         | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
+                         | otherwise = Sym s
+coerceIt reassoc (reassoc -> Group g)         = Group $ foldStepParser reassoc g
+coerceIt reassoc (reassoc -> MatchVariable a) = absurd a
+coerceIt reassoc (reassoc -> Step a)          = absurd a
 
 
-foldStepParser :: [Term Void1] -> [Term Identity]
-foldStepParser [] = []
-foldStepParser (Sym "!" : a : as) = Step (Identity $ coerceIt a) : foldStepParser as
-foldStepParser (a : as) = coerceIt a : foldStepParser as
+foldStepParser :: (Term Void1 -> Term Void1) -> [Term Void1] -> [Term Identity]
+foldStepParser reassoc [] = []
+foldStepParser reassoc (Sym "!" : a : as) = Step (Identity $ coerceIt reassoc a) : foldStepParser reassoc as
+foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
 
 
 attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1))
