@@ -5,9 +5,9 @@
 
 module Main where
 
-import           System.Environment
-import           Brick
-import           Brick.AttrMap ( attrMap)
+import           Ansi
+import           Brick hiding (App)
+import           Brick.AttrMap (attrMap)
 import qualified Brick.Main as M
 import           Brick.Types (locationRowL, locationColumnL, Widget)
 import qualified Brick.Types as T
@@ -18,18 +18,23 @@ import           Brick.Widgets.Center
 import qualified Brick.Widgets.Center as C
 import           Brick.Widgets.Core (translateBy, str)
 import           Control.Monad (void)
-import           Control.Monad.State (runState)
+import           Control.Monad.State (runState, evalState)
+import           Data.Attoparsec.Text
+import           Data.Bool
 import           Data.Generics.Product
 import           Data.List.PointedList
+import           Data.Maybe (maybeToList)
+import           Data.Monoid (Endo (..))
+import qualified Data.Text as T
 import qualified Data.Text.IO as T
 import           GHC.Generics
 import qualified Graphics.Vty as V
 import           Lens.Micro ((^.), (&), (%~))
 import           Lib
 import           Parser
+import           System.Environment
 import qualified Text.PrettyPrint.HughesPJ as PP
 import           Types
-import           Data.Attoparsec.Text
 
 
 goPrev :: StepCtx -> StepCtx
@@ -48,6 +53,29 @@ goNext (StepCtx prog) =
        in case mt of
             Just t' -> (t', c')
             Nothing -> error "stuck!"
+
+bindingsToColors :: [Binding] -> String -> String
+bindingsToColors bs = appEndo $ flip foldMap (zip bs bindingColors) $ \(Binding n _, color) ->
+  Endo $ \v ->
+    if T.unpack n == v
+       then color ++ v ++ resetColor
+       else v
+
+bindingColors :: [String]
+bindingColors =
+  [ "\x1b[31m"
+  , "\x1b[33m"
+  , "\x1b[32m"
+  , "\x1b[36m"
+  , "\x1b[34m"
+  , "\x1b[35m"
+  ]
+
+resetColor :: String
+resetColor = "\x1b[0m"
+
+runApp :: StepCtx -> App a -> a
+runApp ctx ma = evalState ma $ snd $ _focus $ stepProgram ctx
 
 data StepCtx = StepCtx
   { stepProgram :: PointedList (Term Void1, NimicCtx)
@@ -68,22 +96,36 @@ drawUi st =
     ]
 
 termPane :: StepCtx -> Widget ()
-termPane st = padAll 2 $ str $ PP.render $ ppr $ fst $ _focus $ stepProgram st
+termPane
+  = padRight Max
+  . padAll 2
+  . str
+  . PP.render
+  . ppr
+  . fst
+  . _focus
+  . stepProgram
 
 isDefMacro :: Macro -> Bool
 isDefMacro (Macro _ _) = True
 isDefMacro _ = False
 
 macroPane :: StepCtx -> Widget ()
-macroPane
-  = padAll 2
-  . vBox
-  . fmap (\(Macro a b) -> str . PP.render $ pprId a)
-  . filter isDefMacro
-  . ctxDefMacros
-  . snd
-  . _focus
-  . stepProgram
+macroPane ctx@(StepCtx p) =
+  let ms = ctxDefMacros . snd $ _focus p
+      t = fst $ _focus p
+      macroMatches m = bindingsToColors $ runApp ctx $ doAttemptMacro t m
+   in padAll 2
+    . vBox
+    . fmap (\m@(Macro a b) -> raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) a)
+    . filter isDefMacro
+    $ ms
+
+ansiImage :: T.Text -> V.Image
+ansiImage = foldMap mkLine . map parseANSI . T.lines
+  where
+    mkLine ss =
+      foldr (V.<|>) mempty [V.text' a s | Segment a s <- ss]
 
 appEvent :: StepCtx -> T.BrickEvent () e -> T.EventM () (T.Next StepCtx)
 appEvent st (T.VtyEvent (V.EvKey V.KLeft []))  =

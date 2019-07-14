@@ -1,3 +1,4 @@
+{-# LANGUAGE BangPatterns          #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE EmptyCase             #-}
@@ -6,13 +7,13 @@
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuantifiedConstraints #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StandaloneDeriving    #-}
+{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
-{-# LANGUAGE BangPatterns   #-}
 
 {-# OPTIONS_GHC -Wall              #-}
 
@@ -129,7 +130,7 @@ step :: Term Void1 -> App (Maybe (Term Void1))
 step t = do
   reassoc <- gets $ getAssocs . ctxReassocs
   ms <- gets ctxDefMacros
-  z <- for ms $ \m -> attemptMacro reassoc t m
+  z <- for ms $ \m -> fmap (fmap fst) $ attemptMacro reassoc t m
   pure $ getFirst $ foldMap First z
 
 force :: Term Void1 -> App (Term Void1)
@@ -155,19 +156,23 @@ foldStepParser reassoc (Sym "!" : a : as) = Step (Identity $ coerceIt reassoc a)
 foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
 
 
-attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1))
+doAttemptMacro :: Term Void1 -> Macro -> App [Binding]
+doAttemptMacro a b = do
+  reassoc <- gets $ getAssocs . ctxReassocs
+  fmap (join . maybeToList . fmap snd) $ attemptMacro reassoc a b
+
+attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, [Binding]))
 attemptMacro reassoc prog (Primitive pattern rewrite) = do
   mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
     Just bs -> do
       z <- rewrite bs
-      pure $ Just z
+      pure $ Just (z, bs)
     Nothing -> pure Nothing
-
 attemptMacro reassoc prog (Macro pattern rewrite) = do
   mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
-    Just bs -> fmap Just $ substBindings bs rewrite
+    Just bs -> fmap (Just . (, bs)) $ substBindings bs rewrite
     Nothing -> pure Nothing
 
 
