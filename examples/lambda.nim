@@ -4,16 +4,11 @@
   ----------
   #a (fix #a)
 
-; (let (#a = #b) ; #rest)
+; let (#a = #b)
   ----------
-  ( ( #a ; #rest2)
-    ----------
-    ( #b ; #rest2)
-  ; #a
-    ----------
-    #b
-  ; #rest
-  )
+  #a
+  ----------
+  #b
 ; let (hello = (math (1 + 5)))
 ; // hello world this is sandy speaking
 ; hello
