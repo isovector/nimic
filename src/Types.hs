@@ -76,6 +76,11 @@ data Macro
     , macroRewrite :: Term Identity
     }
 
+instance Eq Macro where
+  Primitive a _ == Primitive a' _ = a == a'
+  Macro a b     == Macro a' b'    = a == a' && b == b'
+  _             == _              = False
+
 instance Show Macro where
   show (Primitive _ _) = "Primitive"
   show (Macro a b) = "Macro (" ++ show a ++ ") (" ++ show b ++ ")"

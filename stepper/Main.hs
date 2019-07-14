@@ -44,7 +44,7 @@ goNext (StepCtx prog) =
       let (t, c) = _focus prog
           (mt, c') = runState (step t) c
        in case mt of
-            Just t' -> (t', c')
+            Just t' -> (fst t', c')
             Nothing -> error "stuck!"
 
 bindingsToColors :: [Binding] -> String -> String
@@ -96,7 +96,7 @@ drawUi st =
               <+> macros
     ]
 
-termPane :: Maybe (Term Void1 -> Term Void1, [Binding]) -> StepCtx -> Widget ()
+termPane :: Maybe (Term Void1 -> Term Void1, (Macro, [Binding])) -> StepCtx -> Widget ()
 termPane Nothing
   = padRight Max
   . padAll 2
@@ -113,7 +113,7 @@ termPane (Just (reassoc, bs))
   . ansiImage
   . T.pack
   . PP.render
-  . pprRaw (bindingsToTreeColors bs)
+  . pprRaw (bindingsToTreeColors $ snd bs)
   . fst
   . _focus
   . stepProgram
@@ -128,13 +128,19 @@ pprMacro macroMatches m@(Macro a _)
 pprMacro macroMatches m@(Primitive a _)
   = raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) a
 
-macroPane :: StepCtx -> (Maybe (Term Void1 -> Term Void1, [Binding]), Widget ())
+macroPane :: StepCtx -> (Maybe (Term Void1 -> Term Void1, (Macro, [Binding])), Widget ())
 macroPane ctx@(StepCtx p) =
   let ms = ctxDefMacros . snd $ _focus p
       t = fst $ _focus p
-      macroMatches m = bindingsToColors $ join $ maybeToList $ snd $ runApp ctx $ doAttemptMacro t m
-      firstMacro = getFirst $ foldMap (First . sequenceA . runApp ctx . doAttemptMacro t) $ ms
-   in (firstMacro, )
+      matched = runApp ctx $ doStep t
+      macroMatches m =
+        case matched of
+          Nothing -> id
+          Just (_, (matchedM, bs)) ->
+            if matchedM == m
+               then bindingsToColors bs
+               else id
+   in (matched, )
     . padAll 2
     . vBox
     . fmap (pprMacro macroMatches)

@@ -22,6 +22,7 @@ module Lib where
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Attoparsec.Text
+import           Data.Bifunctor
 import           Data.Functor.Identity
 import           Data.Generics hiding (empty)
 import           Data.Generics.Product
@@ -36,7 +37,6 @@ import           Parser
 import           System.IO.Unsafe
 import           System.Process
 import           Types
-import qualified Text.PrettyPrint.HughesPJ as PP
 
 
 attemptToBind :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity -> Maybe [Binding]
@@ -66,7 +66,7 @@ substBindings bs (MatchVariable (Identity n)) =
 substBindings bs (Step (Identity t)) = do
   t' <- substBindings bs t
   ms <- gets ctxDefMacros
-  fmap (fromMaybe (error $ "couldn't step!\n\n" ++ show ms ++ "\n\n\n" ++ show bs ++ "\n\n\n------------>" ++ show t')) $ step t'
+  fmap (fromMaybe (error $ "couldn't step!\n\n" ++ show ms ++ "\n\n\n" ++ show bs ++ "\n\n\n------------>" ++ show t')) $ fmap (fmap fst) $ step t'
 
 
 doAParseJob :: Text -> Term Identity
@@ -127,18 +127,25 @@ macros =
       pure shellTerm
   ]
 
-step :: Term Void1 -> App (Maybe (Term Void1))
-step g@(Group (first:rest)) = do
-  mTerm <- step first
+doStep :: Term Void1 -> App (Maybe (Term Void1 -> Term Void1, (Macro, [Binding])))
+doStep t = do
+  reassoc <- gets $ getAssocs . ctxReassocs
+  z <- step t
+  pure $ fmap (first $ const reassoc ) z
+
+step :: Term Void1 -> App (Maybe (Term Void1, (Macro, [Binding])))
+step g@(Group (f:rest)) = do
+  mTerm <- step f
   case mTerm of
-    Just t -> pure $ Just (Group (t:rest))
+    Just (t, z) -> pure $ Just (Group (t:rest), z)
     Nothing -> step' g
 step t = step' t
 
+step' :: Term Void1 -> App (Maybe (Term Void1, (Macro, [Binding])))
 step' t = do
   reassoc <- gets $ getAssocs . ctxReassocs
   ms <- gets ctxDefMacros
-  z <- for ms $ \m -> fmap (fmap fst) $ attemptMacro reassoc t m
+  z <- for ms $ \m -> attemptMacro reassoc t m
   pure $ getFirst $ foldMap First z
 
 force :: Term Void1 -> App (Term Void1)
@@ -146,7 +153,7 @@ force t = do
   mt <- step t
   case mt of
     Nothing -> pure t
-    Just t' -> force t'
+    Just (t', _) -> force t'
 
 coerceIt :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity
 coerceIt reassoc (reassoc -> Sym s)
@@ -163,24 +170,19 @@ foldStepParser _ [] = []
 foldStepParser reassoc (Sym "!" : a : as) = Step (Identity $ coerceIt reassoc a) : foldStepParser reassoc as
 foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
 
-doAttemptMacro :: Term Void1 -> Macro -> App (Term Void1 -> Term Void1, Maybe [Binding])
-doAttemptMacro a b = do
-  reassoc <- gets $ getAssocs . ctxReassocs
-  fmap ((reassoc, ) . fmap snd) $ attemptMacro reassoc a b
-
-attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, [Binding]))
-attemptMacro reassoc prog (Primitive pattern rewrite) = do
+attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, (Macro, [Binding])))
+attemptMacro reassoc prog m@(Primitive pattern rewrite) = do
   mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
     Just bs -> do
       z <- rewrite bs
-      pure $ Just (z, bs)
+      pure $ Just (z, (m, bs))
     Nothing -> pure Nothing
 
-attemptMacro reassoc prog (Macro pattern rewrite) = do
+attemptMacro reassoc prog m@(Macro pattern rewrite) = do
   mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
-    Just bs -> fmap (Just . (, bs)) $ substBindings bs rewrite
+    Just bs -> fmap (Just . (, (m, bs))) $ substBindings bs rewrite
     Nothing -> pure Nothing
 
 mkAssoc :: AssocLevel -> (Term Void1 -> Term Void1) -> App ()
