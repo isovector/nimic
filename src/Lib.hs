@@ -11,6 +11,8 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
 {-# LANGUAGE ViewPatterns          #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE BangPatterns   #-}
 
 {-# OPTIONS_GHC -Wall              #-}
 
@@ -60,7 +62,7 @@ substBindings bs (Group s) = fmap Group $ traverse (substBindings bs) s
 substBindings bs (MatchVariable (Identity n)) =
   case find ((== n) . bindingName) bs of
     Just binding -> pure $ bindingValue binding
-    Nothing      -> error "unbound error!"
+    Nothing      -> error $ "unbound error! binding not found " <> T.unpack n
 substBindings bs (Step (Identity t)) = do
   t' <- substBindings bs t
   ms <- gets ctxDefMacros
@@ -119,8 +121,9 @@ macros =
   , Primitive (doAParseJob "(bash #cmd)") $ \bs -> do
       let cmdTerm = unsafeGetPrimitiveBinding' bs "#cmd"
           (shellCmd :: String) = T.unpack $ termToShell cmdTerm
-          stdout = T.pack $ unsafePerformIO $ readCreateProcess (shell shellCmd) ""
-          shellTerm = either (error "***Shell parse***") id . parseOnly parseImplicitGroup $ stdout
+          !_ = unsafePerformIO $ putStrLn shellCmd
+          stdout = T.pack $ "{ bash-stdout ; " <> (unsafePerformIO $ readCreateProcess (shell shellCmd) "") <> " }"
+          shellTerm = either (error $ "***Shell parse*** " <> T.unpack stdout) id . parseOnly parseImplicitGroup $ stdout
       pure shellTerm
   ]
 
@@ -138,15 +141,14 @@ force t = do
     Nothing -> pure t
     Just t' -> force t'
 
-
 coerceIt :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity
 coerceIt reassoc (reassoc -> Sym s) | T.isPrefixOf "#" s = MatchVariable $ Identity s
                          | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
+                         | T.isPrefixOf "!" s = Step $ Identity $ Sym $ T.drop 1 s
                          | otherwise = Sym s
 coerceIt reassoc (reassoc -> Group g)         = Group $ foldStepParser reassoc g
 coerceIt reassoc (reassoc -> MatchVariable a) = absurd a
 coerceIt reassoc (reassoc -> Step a)          = absurd a
-
 
 foldStepParser :: (Term Void1 -> Term Void1) -> [Term Void1] -> [Term Identity]
 foldStepParser reassoc [] = []

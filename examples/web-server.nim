@@ -1,7 +1,11 @@
-{
-  macro (web #resp)
-        (!(bash (echo -e 'HTTP/1.1 200 OK\r\n #resp \n' | nc -l 9090))
-	; (web #resp))
+; http-200
+  ----------
+  'HTTP/1.1 200 OK\r\n'
 
-; (web "yo")
-}
+; web #resp
+  ----------
+  ( discard (bash (echo !http-200 ' #resp ' | nc -l 9090))
+  ; web #resp
+  )
+
+; web yo
