@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: bba51a1def0f8716d64cebf4c9eb4fde4c1f9795af8834d951dd07d0f6b693b4
+-- hash: 4f4e0806c34402bbcd48f3a2a0e9837663275d3ac29614818a54386f0efe6c50
 
 name:           nimic
 version:        0.1.0.0
@@ -28,6 +28,8 @@ source-repository head
 library
   exposed-modules:
       Lib
+      Parser
+      Types
   other-modules:
       Paths_nimic
   hs-source-dirs:

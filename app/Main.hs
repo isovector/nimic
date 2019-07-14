@@ -2,12 +2,14 @@
 
 module Main where
 
-import Text.PrettyPrint.HughesPJ hiding (char, empty, ptext)
 import           Control.Monad.State
 import           Data.Attoparsec.Text
 import qualified Data.Text.IO as T
 import           Lib
+import           Parser
 import           System.Environment
+import           Text.PrettyPrint.HughesPJ hiding (char, empty, ptext)
+import           Types
 
 main :: IO ()
 main = do

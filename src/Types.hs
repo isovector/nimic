@@ -70,6 +70,11 @@ data Binding = Binding
   }
   deriving (Eq, Show, Data)
 
+
+data NimicCtx = NimicCtx
+  { ctxDefMacros :: [Macro]
+  }
+
 absurd :: Void1 a -> b
 absurd a = case a of
 
