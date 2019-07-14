@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveDataTypeable    #-}
+{-# LANGUAGE DeriveGeneric         #-}
 {-# LANGUAGE EmptyCase             #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuantifiedConstraints #-}
@@ -11,8 +12,10 @@ module Types where
 import           Control.Monad.State
 import           Data.Functor.Identity
 import           Data.Generics hiding (empty)
+import           Data.Monoid
 import           Data.Text (Text)
 import qualified Data.Text as T
+import qualified GHC.Generics as GG
 import           Text.PrettyPrint.HughesPJ hiding (char, empty, ptext, (<>))
 
 ppr :: Term Void1 -> Doc
@@ -51,8 +54,10 @@ deriving instance (forall x. Eq x => Eq (f x)) => Eq (Term f)
 deriving instance (forall x. Show x => Show (f x)) => Show (Term f)
 deriving instance (forall x. Data x => Data (f x), Typeable f) => Data (Term f)
 
+type App = State NimicCtx
+
 data Macro
-  = Primitive (Term Identity) ([Binding] -> State [Macro] (Term Void1))
+  = Primitive (Term Identity) ([Binding] -> App (Term Void1))
   | Macro
     { macroMatch   :: Term Identity
     , macroRewrite :: Term Identity
@@ -73,7 +78,14 @@ data Binding = Binding
 
 data NimicCtx = NimicCtx
   { ctxDefMacros :: [Macro]
-  }
+  , ctxReassocs :: AssocLevel -> Endo (Term Void1)
+  } deriving (GG.Generic)
+
+
+data AssocLevel
+  = A1 | A2 | A3 | A4 | A5 | A6 | A7 | A8 | A9
+  deriving (Eq, Ord, Show, Bounded, Enum, Read)
+
 
 absurd :: Void1 a -> b
 absurd a = case a of

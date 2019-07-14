@@ -19,7 +19,7 @@ main = do
   let res = do
         prelude <- parseOnly parseImplicitGroup prelcont
         program <- parseOnly parseImplicitGroup progcont
-        pure $ flip evalState macros $ do
+        pure $ flip evalState (NimicCtx macros mempty) $ do
           ran_prelude <- force prelude
           force $ Group [ ran_prelude, Sym ";",  program ]
   case res of

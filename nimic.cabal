@@ -4,7 +4,7 @@ cabal-version: 1.12
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 4f4e0806c34402bbcd48f3a2a0e9837663275d3ac29614818a54386f0efe6c50
+-- hash: 4a2aaca181449156156cd5bff1dbc97c9d6b5ec8299f924c39e18f3031f58b0a
 
 name:           nimic
 version:        0.1.0.0
@@ -37,6 +37,8 @@ library
   build-depends:
       attoparsec
     , base >=4.7 && <5
+    , generic-lens
+    , microlens
     , mtl
     , pretty
     , process
@@ -54,6 +56,8 @@ executable exe
   build-depends:
       attoparsec
     , base >=4.7 && <5
+    , generic-lens
+    , microlens
     , mtl
     , nimic
     , pretty

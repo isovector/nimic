@@ -27,6 +27,8 @@ dependencies:
 - mtl
 - pretty
 - process
+- microlens
+- generic-lens
 
 library:
   source-dirs: src

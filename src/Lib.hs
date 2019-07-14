@@ -1,18 +1,25 @@
+{-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DeriveDataTypeable    #-}
 {-# LANGUAGE EmptyCase             #-}
 {-# LANGUAGE LambdaCase            #-}
+{-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuantifiedConstraints #-}
+{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
+{-# LANGUAGE ViewPatterns          #-}
 
 {-# OPTIONS_GHC -Wall              #-}
 
 module Lib where
 
+import           Text.PrettyPrint.HughesPJ (render)
+import Debug.Trace
+import Data.Generics.Product
+import Lens.Micro
 import           Control.Monad
 import           Control.Monad.State
 import           Data.Attoparsec.Text
@@ -30,14 +37,14 @@ import           System.Process
 import           Types
 
 
-attemptToBind :: Term Void1 -> Term Identity -> Maybe [Binding]
-attemptToBind (Sym s) (Sym s') | s == s' = Just []
-attemptToBind (Group l) (Group l') = do
+attemptToBind :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity -> Maybe [Binding]
+attemptToBind reassoc (reassoc -> Sym s) (Sym s') | s == s' = Just []
+attemptToBind reassoc (reassoc -> Group l) (Group l') = do
   guard $ length l == length l'
-  bindings <- sequence $ zipWith attemptToBind l l'
+  bindings <- sequence $ zipWith (attemptToBind reassoc) l l'
   Just $ join bindings
-attemptToBind prog (MatchVariable (Identity m)) = Just [Binding m prog]
-attemptToBind _ _  = Nothing
+attemptToBind _ prog (MatchVariable (Identity m)) = Just [Binding m prog]
+attemptToBind _ _ _  = Nothing
 
 
 substTerm :: Term Identity -> Term Identity -> Term Identity -> Term Identity
@@ -47,7 +54,7 @@ substTerm pattern rewrite =
       | otherwise -> a
 
 
-substBindings :: [Binding] -> Term Identity -> State [Macro] (Term Void1)
+substBindings :: [Binding] -> Term Identity -> App (Term Void1)
 substBindings _ (Sym s) = pure $ Sym s
 substBindings bs (Group s) = fmap Group $ traverse (substBindings bs) s
 substBindings bs (MatchVariable (Identity n)) =
@@ -56,7 +63,7 @@ substBindings bs (MatchVariable (Identity n)) =
     Nothing      -> error "unbound error!"
 substBindings bs (Step (Identity t)) = do
   t' <- substBindings bs t
-  ms <- get
+  ms <- gets ctxDefMacros
   fmap (fromMaybe (error $ "couldn't step!\n\n" ++ show ms ++ "\n\n\n" ++ show bs ++ "\n\n\n------------>" ++ show t')) $ step t'
 
 
@@ -91,7 +98,7 @@ macros =
       let a = unsafeGetPrimitiveBinding bs "#a"
           b = unsafeGetPrimitiveBinding bs "#b"
           c = unsafeGetPrimitiveBinding' bs "#c"
-      modify $ (Macro a b :)
+      modify $ field @"ctxDefMacros" %~ (Macro a b :)
       pure c
 
   , Primitive (doAParseJob "(replace #a #b #c)") $ \bs -> do
@@ -99,6 +106,13 @@ macros =
           Sym b = unsafeGetPrimitiveBinding' bs "#b"
           c = unsafeGetPrimitiveBinding' bs "#c"
       substBindings [Binding b c] $ substTerm (Sym b) (MatchVariable (Identity b)) a
+
+  , Primitive (doAParseJob "((rassoc #prec #sym) ; #rest)") $ \bs -> do
+      let Sym prec = unsafeGetPrimitiveBinding' bs "#prec"
+          Sym sym = unsafeGetPrimitiveBinding' bs "#sym"
+          rest = unsafeGetPrimitiveBinding' bs "#rest"
+      mkAssoc (read $ 'A' : T.unpack prec) (rassoc sym)
+      pure rest
 
   , Primitive (doAParseJob "(bash #cmd)") $ \bs -> do
       let cmdTerm = unsafeGetPrimitiveBinding' bs "#cmd"
@@ -108,15 +122,14 @@ macros =
       pure shellTerm
   ]
 
-
-step :: Term Void1 -> State [Macro] (Maybe (Term Void1))
+step :: Term Void1 -> App (Maybe (Term Void1))
 step t = do
-  ms <- get
-  z <- for ms $ \m -> attemptMacro t m
+  reassoc <- gets $ getAssocs . ctxReassocs
+  ms <- gets ctxDefMacros
+  z <- for ms $ \m -> attemptMacro reassoc t m
   pure $ getFirst $ foldMap First z
 
-
-force :: Term Void1 -> State [Macro] (Term Void1)
+force :: Term Void1 -> App (Term Void1)
 force t = do
   mt <- step t
   case mt of
@@ -139,18 +152,54 @@ foldStepParser (Sym "!" : a : as) = Step (Identity $ coerceIt a) : foldStepParse
 foldStepParser (a : as) = coerceIt a : foldStepParser as
 
 
-attemptMacro :: Term Void1 -> Macro -> State [Macro] (Maybe (Term Void1))
-attemptMacro prog (Primitive pattern rewrite) = do
-  mbs <- pure $ attemptToBind prog pattern
+attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1))
+attemptMacro reassoc prog (Primitive pattern rewrite) = do
+  mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
     Just bs -> do
       z <- rewrite bs
       pure $ Just z
     Nothing -> pure Nothing
 
-attemptMacro prog (Macro pattern rewrite) = do
-  mbs <- pure $ attemptToBind prog pattern
+attemptMacro reassoc prog (Macro pattern rewrite) = do
+  mbs <- pure $ attemptToBind reassoc prog pattern
   case mbs of
     Just bs -> fmap Just $ substBindings bs rewrite
     Nothing -> pure Nothing
+
+
+
+mkAssoc :: AssocLevel -> (Term Void1 -> Term Void1) -> App ()
+mkAssoc l f = modify $ \s ->
+  s & field @"ctxReassocs" <>~ \l' ->
+    Endo $
+      if l == l'
+         then f
+         else id
+
+withGroupAssoc
+    :: ([Term Void1] -> [Term Void1])
+    -> Term Void1
+    -> Term Void1
+withGroupAssoc f (Group g) = Group $ f g
+withGroupAssoc _ a = a
+
+rassoc :: Text -> Term Void1 -> Term Void1
+rassoc t = withGroupAssoc go
+  where
+    go [] = []
+    go g =
+      let (a, b) = span (/= Sym t) g
+       in case b of
+            [] -> a
+            _ -> [groupIfNotSingleton a, Sym t, groupIfNotSingleton (go $ drop 1 b)]
+
+
+groupIfNotSingleton :: [Term a] -> Term a
+groupIfNotSingleton [a] = a
+groupIfNotSingleton a = Group a
+
+
+getAssocs :: (AssocLevel -> Endo (Term Void1)) -> Term Void1 -> Term Void1
+getAssocs f = appEndo $ foldMap f $ reverse [minBound .. maxBound]
 
