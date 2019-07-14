@@ -70,7 +70,10 @@ deriving instance (forall x. Data x => Data (f x), Typeable f) => Data (Term f)
 type App = State NimicCtx
 
 data Macro
-  = Primitive (Term Identity) ([Binding] -> App (Term Void1))
+  = Primitive
+    { macroMatch :: Term Identity
+    , macroAction :: [Binding] -> App (Term Void1)
+    }
   | Macro
     { macroMatch   :: Term Identity
     , macroRewrite :: Term Identity

@@ -65,10 +65,11 @@ bindingColors :: [String]
 bindingColors =
   [ "\x1b[31m"
   , "\x1b[33m"
-  , "\x1b[32m"
   , "\x1b[36m"
   , "\x1b[34m"
   , "\x1b[35m"
+  , "\x1b[32m"
+  , "\x1b[35;1m"
   ]
 
 resetColor :: String
@@ -122,17 +123,19 @@ isDefMacro :: Macro -> Bool
 isDefMacro (Macro _ _) = True
 isDefMacro _ = False
 
-pprMacro :: (Macro -> String -> String) -> Macro -> Widget ()
-pprMacro macroMatches m@(Macro a _)
-  = raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) a
-pprMacro macroMatches m@(Primitive a _)
-  = raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) a
+pprMacro :: Maybe Macro -> (Macro -> String -> String) -> Macro -> Widget ()
+pprMacro (Just m') macroMatches m
+  | m == m' = raw
+            . ansiImage . T.pack . (last bindingColors ++) . PP.render $ pprId (macroMatches m . T.unpack) $ macroMatch m
+pprMacro _ macroMatches m
+  = raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) $ macroMatch m
 
 macroPane :: StepCtx -> (Maybe (Term Void1 -> Term Void1, (Macro, [Binding])), Widget ())
 macroPane ctx@(StepCtx p) =
   let ms = ctxDefMacros . snd $ _focus p
       t = fst $ _focus p
       matched = runApp ctx $ doStep t
+      theMacro = fmap (fst . snd) matched
       macroMatches m =
         case matched of
           Nothing -> id
@@ -143,7 +146,7 @@ macroPane ctx@(StepCtx p) =
    in (matched, )
     . padAll 2
     . vBox
-    . fmap (pprMacro macroMatches)
+    . fmap (pprMacro theMacro macroMatches)
     $ ms
 
 ansiImage :: T.Text -> V.Image
