@@ -1,5 +1,6 @@
-(rassoc 1 ;)
-; ( macro (#a ; #b) #b
+(macro (#a ; #b) #b)
+; ((rassoc 1 ;)
+; (
 ; macro
   ( #a
     ----------
@@ -13,5 +14,5 @@
   ----------
   (bash (cat #file))
 ; // a macro won't get forced if it's the last statement
-)
+))
 

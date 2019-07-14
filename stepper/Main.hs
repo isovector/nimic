@@ -122,16 +122,22 @@ isDefMacro :: Macro -> Bool
 isDefMacro (Macro _ _) = True
 isDefMacro _ = False
 
+pprMacro :: (Macro -> String -> String) -> Macro -> Widget ()
+pprMacro macroMatches m@(Macro a _)
+  = raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) a
+pprMacro macroMatches m@(Primitive a _)
+  = raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) a
+
 macroPane :: StepCtx -> (Maybe (Term Void1 -> Term Void1, [Binding]), Widget ())
 macroPane ctx@(StepCtx p) =
-  let ms = filter isDefMacro . ctxDefMacros . snd $ _focus p
+  let ms = ctxDefMacros . snd $ _focus p
       t = fst $ _focus p
       macroMatches m = bindingsToColors $ join $ maybeToList $ snd $ runApp ctx $ doAttemptMacro t m
       firstMacro = getFirst $ foldMap (First . sequenceA . runApp ctx . doAttemptMacro t) $ ms
    in (firstMacro, )
     . padAll 2
     . vBox
-    . fmap (\m@(Macro a b) -> raw . ansiImage . T.pack . PP.render $ pprId (macroMatches m . T.unpack) a)
+    . fmap (pprMacro macroMatches)
     $ ms
 
 ansiImage :: T.Text -> V.Image

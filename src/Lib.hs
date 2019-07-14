@@ -98,12 +98,11 @@ termToShell o = T.pack $ "echo 'what the heck are you doing" <> show o <> "'"
 
 macros :: [Macro]
 macros =
-  [ Primitive (doAParseJob "((macro #a #b); #c)") $ \bs -> do
+  [ Primitive (doAParseJob "(macro #a #b)") $ \bs -> do
       a <- unsafeGetPrimitiveBinding bs "#a"
       b <- unsafeGetPrimitiveBinding bs "#b"
-      let c = unsafeGetPrimitiveBinding' bs "#c"
       modify $ field @"ctxDefMacros" %~ (Macro a b :)
-      pure c
+      pure $ Sym "defined"
 
   , Primitive (doAParseJob "(replace #a #b #c)") $ \bs -> do
       a <-  unsafeGetPrimitiveBinding bs "#a"
@@ -111,12 +110,11 @@ macros =
           c = unsafeGetPrimitiveBinding' bs "#c"
       substBindings [Binding b c] $ substTerm (Sym b) (MatchVariable (Identity b)) a
 
-  , Primitive (doAParseJob "((rassoc #prec #sym) ; #rest)") $ \bs -> do
+  , Primitive (doAParseJob "(rassoc #prec #sym)") $ \bs -> do
       let Sym prec = unsafeGetPrimitiveBinding' bs "#prec"
           Sym sym = unsafeGetPrimitiveBinding' bs "#sym"
-          rest = unsafeGetPrimitiveBinding' bs "#rest"
       mkAssoc (read $ 'A' : T.unpack prec) (rassoc sym)
-      pure rest
+      pure $ Sym "defined"
 
   , Primitive (doAParseJob "(bash #cmd)") $ \bs -> do
       let cmdTerm = unsafeGetPrimitiveBinding' bs "#cmd"
