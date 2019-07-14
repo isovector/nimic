@@ -1,1 +1,1 @@
-macro (math #m) (bash (bc <<< " #m "))
+macro (math #m) (!(bash (bc <<< " #m ")))

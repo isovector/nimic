@@ -66,8 +66,7 @@ substBindings bs (MatchVariable (Identity n)) =
 substBindings bs (Step (Identity t)) = do
   t' <- substBindings bs t
   ms <- gets ctxDefMacros
-  fmap (fromMaybe (error $ "couldn't step!\n\n" ++ show ms ++ "\n\n\n" ++ show bs ++ "\n\n\n------------>" ++ show t')) $ fmap (fmap fst) $ step t'
-
+  force t'
 
 doAParseJob :: Text -> Term Identity
 doAParseJob

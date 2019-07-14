@@ -13,6 +13,7 @@
 ; (import #file)
   ----------
   (bash (cat #file))
-; // a macro won't get forced if it's the last statement
+
+; import examples/math.nim
 ))
 
