@@ -1,3 +1,5 @@
+{-# LANGUAGE OverloadedStrings #-}
+
 module Main where
 
 import Text.PrettyPrint.HughesPJ hiding (char, empty, ptext)
@@ -10,10 +12,14 @@ import           System.Environment
 main :: IO ()
 main = do
   [filepath] <- getArgs
-  contents <- T.readFile filepath
+  prelcont <- T.readFile "examples/prelude.nim"
+  progcont <- T.readFile filepath
   let res = do
-        program <- parseOnly parseImplicitGroup contents
-        pure $ evalState (force program) macros
+        prelude <- parseOnly parseImplicitGroup prelcont
+        program <- parseOnly parseImplicitGroup progcont
+        pure $ flip evalState macros $ do
+          ran_prelude <- force prelude
+          force $ Group [ ran_prelude, Sym ";",  program ]
   case res of
     Left err -> do
       putStrLn "nimic parse error:"
