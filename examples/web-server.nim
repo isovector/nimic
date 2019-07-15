@@ -10,11 +10,8 @@
 
 ; (write-read-socket #msg #port)
   ----------
-  (bash (echo #msg | nc -l #port))
+  (socket-resp !(bash (echo #msg | nc -l #port)))
 
-; (read-socket #port)
-  ----------
-  (bash (nc -l #port))
-
-; write-read-socket ("this is a test") 9090
-
+; while i
+        true
+        (write-read-socket ("the i 'th test") 9090)
