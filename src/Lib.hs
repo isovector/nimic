@@ -118,6 +118,10 @@ macros =
 
       stdout <- lift $ fmap T.pack $ readCreateProcess (shell shellCmd) ""
       pure $ either (error $ "***Shell parse*** " <> T.unpack stdout) id . parseOnly parseImplicitGroup $ stdout
+
+  , Primitive (doAParseJob "(get user input)") $ \_ -> do
+      res <- lift getLine
+      pure $ either (error $ "bad input" <> res) id . parseOnly parseImplicitGroup $ T.pack res
   ]
 
 doStep :: Term Void1 -> App (Maybe (Term Void1 -> Term Void1, (Macro, [Binding])))
