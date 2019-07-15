@@ -34,17 +34,20 @@ parseSym = do
 parseGroup :: CanParseVar a => Parser (Term a)
 parseGroup = do
   _ <- char '('
-  subTerm <- some parseTerm
+  subTerm <- many parseTerm
   skipSpace
   _ <- char ')'
   pure $ Group subTerm
 
 parseImplicitGroup :: CanParseVar a => Parser (Term a)
 parseImplicitGroup = do
-  subTerm <- some parseTerm
-  pure $ case subTerm of
-    [a] -> a
-    _   -> Group subTerm
+  subTerm <- many1 parseTerm
+  skipSpace
+  endOfInput
+  pure $
+    case subTerm of
+      [a] -> a
+      _   -> Group subTerm
 
 
 symbolChar :: Char -> Bool
