@@ -3,6 +3,12 @@
 ; even? #n <=> ::even? !(math (#n % 2)
 will parse to
 (even? #n <=>)
+- math #m <=> !(bash bc <<< #m)  failed to parse correctly
+- rassoc introduce empty groups for things that are on the left most edge
+  ie.
+  ; rassoc 3 math
+  gives us macros that look like:
+  (() math #m)
 
 ```
 (if true then [b] else [c]); [rest]

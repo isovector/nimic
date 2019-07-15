@@ -8,4 +8,13 @@
   ; web #resp
   )
 
-; web yo
+; (write-read-socket #msg #port)
+  ----------
+  (bash (echo #msg | nc -l #port))
+
+; (read-socket #port)
+  ----------
+  (bash (nc -l #port))
+
+; write-read-socket ("this is a test") 9090
+
