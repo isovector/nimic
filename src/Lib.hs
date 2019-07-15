@@ -117,6 +117,7 @@ macros =
           (shellCmd :: String) = T.unpack $ termToShell cmdTerm
 
       stdout <- lift $ fmap T.pack $ readCreateProcess (shell shellCmd) ""
+      _ <- lift $ print stdout
       pure $ either (error $ "***Shell parse*** " <> T.unpack stdout) id . parseOnly parseImplicitGroup $ stdout
 
   , Primitive (doAParseJob "(get user input)") $ \_ -> do

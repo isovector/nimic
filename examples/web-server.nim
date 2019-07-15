@@ -14,4 +14,4 @@
 
 ; while i
         true
-        (write-read-socket ("the i 'th test") 9090)
+        (write-read-socket !(http-200) 9090)

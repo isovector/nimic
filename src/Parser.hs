@@ -41,7 +41,7 @@ parseGroup = do
 
 parseImplicitGroup :: CanParseVar a => Parser (Term a)
 parseImplicitGroup = do
-  subTerm <- many1 parseTerm
+  subTerm <- many parseTerm
   skipSpace
   endOfInput
   pure $
