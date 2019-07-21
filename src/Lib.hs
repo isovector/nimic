@@ -46,13 +46,11 @@ attemptToBind reassoc (reassoc -> Group l) (Group l') = do
 attemptToBind _ prog (MatchVariable (Identity m)) = Just [Binding m prog]
 attemptToBind _ _ _  = Nothing
 
-
 substTerm :: Term Identity -> Term Identity -> Term Identity -> Term Identity
 substTerm pattern rewrite =
-  everywhere $ mkT $ \case
-    a | a == pattern -> rewrite
-      | otherwise -> a
-
+  everywhere $ mkT $ \a -> if (a == pattern)
+                              then rewrite
+                              else a
 
 substBindings :: [Binding] -> Term Identity -> App (Term Void1)
 substBindings _ (Sym s) = pure $ Sym s
@@ -117,7 +115,6 @@ macros =
           (shellCmd :: String) = T.unpack $ termToShell cmdTerm
 
       stdout <- lift $ fmap T.pack $ readCreateProcess (shell shellCmd) ""
-      _ <- lift $ print stdout
       pure $ either (error $ "***Shell parse*** " <> T.unpack stdout) id . parseOnly parseImplicitGroup $ stdout
 
   , Primitive (doAParseJob "(get user input)") $ \_ -> do

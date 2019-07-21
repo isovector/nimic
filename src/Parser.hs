@@ -14,7 +14,7 @@ import           Types
 
 parseToken :: Parser Text
 parseToken = do
-  c <- satisfy $ symbolChar
+  c <- satisfy symbolChar
   cs <- parseToken'
   pure $ T.pack $ c:cs
 

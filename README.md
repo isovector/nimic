@@ -1,10 +1,10 @@
+- parser can't handle top level bangs in a macro:
+  e.g. `macro (forced-bash #cmd) !(bash #cmd)` fails to parse
+
+- stepper evaluates a macro twice (breaks impure macros like `bash`)
 - make force be steppable 
-- if you ommit a paran, the parser sometimes drops a term ie.
-; even? #n <=> ::even? !(math (#n % 2)
-will parse to
-(even? #n <=>)
 - math #m <=> !(bash bc <<< #m)  failed to parse correctly
-- rassoc introduce empty groups for things that are on the left most edge
+- nit: rassoc introduce empty groups for things that are on the left most edge
   ie.
   ; rassoc 3 math
   gives us macros that look like:
