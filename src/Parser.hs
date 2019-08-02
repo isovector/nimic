@@ -15,6 +15,13 @@ import           Types
 parseToken :: Parser Text
 parseToken = takeWhile1 symbolChar
 
+symbolChar :: Char -> Bool
+symbolChar c = not $ or
+  [ isSpace c
+  , c == '('
+  , c == ')'
+  ]
+
 parseSym :: Parser (Term a)
 parseSym = do
   token <- parseToken
@@ -37,14 +44,6 @@ parseImplicitGroup = do
     case subTerm of
       [a] -> a
       _   -> Group subTerm
-
-
-symbolChar :: Char -> Bool
-symbolChar c = not $ or
-  [ isSpace c
-  , c == '('
-  , c == ')'
-  ]
 
 parseMatchVariable :: CanParseVar a => Parser (Term a)
 parseMatchVariable = do

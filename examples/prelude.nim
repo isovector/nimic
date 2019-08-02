@@ -5,6 +5,6 @@
     ; rassoc 2 =>
     ; import #module => bash (cat #module)
     ; import examples/math.nim
-    ; math (1 (+ (2 ())))
+    ; math (1 + 2)
   )
 )

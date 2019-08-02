@@ -1,12 +1,10 @@
 {-# LANGUAGE BangPatterns          #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DeriveDataTypeable    #-}
-{-# LANGUAGE EmptyCase             #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE TupleSections         #-}
@@ -35,7 +33,6 @@ import           Lens.Micro
 import           Parser
 import           System.Process
 import           Types
-
 
 attemptToBind :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity -> Maybe [Binding]
 attemptToBind reassoc (reassoc -> Sym s) (Sym s') | s == s' = Just []
@@ -181,35 +178,29 @@ attemptMacro reassoc prog m@(Macro pattern rewrite) = do
     Nothing -> pure Nothing
 
 mkAssoc :: AssocLevel -> (Term Void1 -> Term Void1) -> App ()
-mkAssoc l f = modify $ \s ->
-  s & field @"ctxReassocs" <>~ \l' ->
+mkAssoc level f = modify $ \s ->
+  s & field @"ctxReassocs" <>~ \level' ->
     Endo $
-      if l == l'
+      if level == level'
          then f
          else id
 
-withGroupAssoc
-    :: ([Term Void1] -> [Term Void1])
-    -> Term Void1
-    -> Term Void1
-withGroupAssoc f (Group g) = Group $ f g
-withGroupAssoc _ a = a
-
 rassoc :: Text -> Term Void1 -> Term Void1
-rassoc t = withGroupAssoc go
-  where
-    go [] = []
-    go g =
-      let (a, b) = span (/= Sym t) g
-       in case b of
-            [] -> a
-            _ -> [groupIfNotSingleton a, Sym t, groupIfNotSingleton (go $ drop 1 b)]
+rassoc _ (Group []) = Group []
+rassoc sep (Group listOfTerms) =
+  let (beforeSep, rest) = span (/= Sym sep) listOfTerms
+      afterSep = drop 1 rest
+      normedHead = groupOrSingleTerm beforeSep
+      normedTail = groupOrSingleTerm afterSep
+  in
+    case rest of
+      [] -> normedHead
+      _ -> Group $ [normedHead, Sym sep, rassoc sep normedTail]
+rassoc _ term = term
 
-
-groupIfNotSingleton :: [Term a] -> Term a
-groupIfNotSingleton [a] = a
-groupIfNotSingleton a = Group a
-
+groupOrSingleTerm :: [Term a] -> Term a
+groupOrSingleTerm [a] = a
+groupOrSingleTerm a = Group a
 
 getAssocs :: (AssocLevel -> Endo (Term Void1)) -> Term Void1 -> Term Void1
 getAssocs f = appEndo $ foldMap f $ reverse [minBound .. maxBound]
