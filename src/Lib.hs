@@ -34,14 +34,14 @@ import           Parser
 import           System.Process
 import           Types
 
-attemptToBind :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity -> Maybe [Binding]
-attemptToBind reassoc (reassoc -> Sym s) (Sym s') | s == s' = Just []
-attemptToBind reassoc (reassoc -> Group l) (Group l') = do
+attemptToBind :: Term Void1 -> Term Identity -> Maybe [Binding]
+attemptToBind (Sym s) (Sym s') | s == s' = Just []
+attemptToBind (Group l) (Group l') = do
   guard $ length l == length l'
-  bindings <- sequence $ zipWith (attemptToBind reassoc) l l'
+  bindings <- sequence $ zipWith attemptToBind l l'
   Just $ join bindings
-attemptToBind _ prog (MatchVariable (Identity m)) = Just [Binding m prog]
-attemptToBind _ _ _  = Nothing
+attemptToBind prog (MatchVariable (Identity m)) = Just [Binding m prog]
+attemptToBind _ _  = Nothing
 
 substTerm :: Term Identity -> Term Identity -> Term Identity -> Term Identity
 substTerm pattern rewrite =
@@ -164,7 +164,7 @@ foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
 
 attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, (Macro, [Binding])))
 attemptMacro reassoc prog m@(Primitive pattern rewrite) = do
-  mbs <- pure $ attemptToBind reassoc prog pattern
+  mbs <- pure $ attemptToBind (reassoc prog) pattern
   case mbs of
     Just bs -> do
       z <- rewrite bs
@@ -172,7 +172,7 @@ attemptMacro reassoc prog m@(Primitive pattern rewrite) = do
     Nothing -> pure Nothing
 
 attemptMacro reassoc prog m@(Macro pattern rewrite) = do
-  mbs <- pure $ attemptToBind reassoc prog pattern
+  mbs <- pure $ attemptToBind (reassoc prog) pattern
   case mbs of
     Just bs -> fmap (Just . (, (m, bs))) $ substBindings bs rewrite
     Nothing -> pure Nothing
