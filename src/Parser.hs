@@ -13,18 +13,7 @@ import           Types
 
 
 parseToken :: Parser Text
-parseToken = do
-  c <- satisfy symbolChar
-  cs <- parseToken'
-  pure $ T.pack $ c:cs
-
-
-parseToken' :: Parser [Char]
-parseToken' = do
-  mc <- peekChar
-  case mc of
-    Just c | symbolChar c -> (:) <$> char c <*> parseToken'
-    _ -> pure []
+parseToken = takeWhile1 symbolChar
 
 parseSym :: Parser (Term a)
 parseSym = do
