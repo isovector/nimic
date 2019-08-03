@@ -11,7 +11,6 @@
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE ViewPatterns          #-}
 
 {-# OPTIONS_GHC -Wall              #-}
 
@@ -62,7 +61,7 @@ substBindings bs (Step (Identity t)) = do
 
 doAParseJob :: Text -> Term Identity
 doAParseJob
-  = coerceIt id
+  = coerceIt
   . either (error "shitty code") id
   . parseOnly parseTerm
 
@@ -71,7 +70,7 @@ unsafeGetPrimitiveBinding :: [Binding] -> Text -> App (Term Identity)
 unsafeGetPrimitiveBinding bs name = do
   let z = unsafeGetPrimitiveBinding' bs name
   reassoc <- gets $ getAssocs . ctxReassocs
-  pure $ coerceIt reassoc z
+  pure $ coerceIt $ reassoc z
 
 
 unsafeGetPrimitiveBinding' :: [Binding] -> Text -> Term Void1
@@ -147,20 +146,20 @@ force t = do
     Nothing -> pure t
     Just (t', _) -> force t'
 
-coerceIt :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity
-coerceIt reassoc (reassoc -> Sym s)
+coerceIt :: Term Void1 -> Term Identity
+coerceIt (Sym s)
   | T.isPrefixOf "#" s  = MatchVariable $ Identity s
   | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
-  | T.isPrefixOf "!" s = Step $ Identity $ Sym $ T.drop 1 s
+  | T.isPrefixOf "!" s  = Step $ Identity $ Sym $ T.drop 1 s
   | otherwise           = Sym s
-coerceIt reassoc (reassoc -> Group g)         = Group $ foldStepParser reassoc g
-coerceIt reassoc (reassoc -> MatchVariable a) = absurd a
-coerceIt reassoc (reassoc -> Step a)          = absurd a
+coerceIt (Group g)         = Group $ foldStepParser g
+coerceIt (MatchVariable a) = absurd a
+coerceIt (Step a)          = absurd a
 
-foldStepParser :: (Term Void1 -> Term Void1) -> [Term Void1] -> [Term Identity]
-foldStepParser _ [] = []
-foldStepParser reassoc (Sym "!" : a : as) = Step (Identity $ coerceIt reassoc a) : foldStepParser reassoc as
-foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
+foldStepParser :: [Term Void1] -> [Term Identity]
+foldStepParser [] = []
+foldStepParser (Sym "!" : a : as) = Step (Identity $ coerceIt a) : foldStepParser as
+foldStepParser (a : as) = coerceIt a : foldStepParser as
 
 attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, (Macro, [Binding])))
 attemptMacro reassoc prog m@(Primitive pattern rewrite) = do
