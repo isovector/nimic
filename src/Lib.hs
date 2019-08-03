@@ -1,19 +1,16 @@
 {-# LANGUAGE BangPatterns          #-}
 {-# LANGUAGE DataKinds             #-}
 {-# LANGUAGE DeriveDataTypeable    #-}
-{-# LANGUAGE EmptyCase             #-}
 {-# LANGUAGE LambdaCase            #-}
 {-# LANGUAGE MonoLocalBinds        #-}
 {-# LANGUAGE OverloadedStrings     #-}
 {-# LANGUAGE QuantifiedConstraints #-}
-{-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE ScopedTypeVariables   #-}
 {-# LANGUAGE StandaloneDeriving    #-}
 {-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE TypeApplications      #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE UndecidableInstances  #-}
-{-# LANGUAGE ViewPatterns          #-}
 
 {-# OPTIONS_GHC -Wall              #-}
 
@@ -36,23 +33,20 @@ import           Parser
 import           System.Process
 import           Types
 
-
-attemptToBind :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity -> Maybe [Binding]
-attemptToBind reassoc (reassoc -> Sym s) (Sym s') | s == s' = Just []
-attemptToBind reassoc (reassoc -> Group l) (Group l') = do
+attemptToBind :: Term Void1 -> Term Identity -> Maybe [Binding]
+attemptToBind (Sym s) (Sym s') | s == s' = Just []
+attemptToBind (Group l) (Group l') = do
   guard $ length l == length l'
-  bindings <- sequence $ zipWith (attemptToBind reassoc) l l'
+  bindings <- sequence $ zipWith attemptToBind l l'
   Just $ join bindings
-attemptToBind _ prog (MatchVariable (Identity m)) = Just [Binding m prog]
-attemptToBind _ _ _  = Nothing
-
+attemptToBind prog (MatchVariable (Identity m)) = Just [Binding m prog]
+attemptToBind _ _  = Nothing
 
 substTerm :: Term Identity -> Term Identity -> Term Identity -> Term Identity
 substTerm pattern rewrite =
-  everywhere $ mkT $ \case
-    a | a == pattern -> rewrite
-      | otherwise -> a
-
+  everywhere $ mkT $ \a -> if (a == pattern)
+                              then rewrite
+                              else a
 
 substBindings :: [Binding] -> Term Identity -> App (Term Void1)
 substBindings _ (Sym s) = pure $ Sym s
@@ -67,7 +61,7 @@ substBindings bs (Step (Identity t)) = do
 
 doAParseJob :: Text -> Term Identity
 doAParseJob
-  = coerceIt id
+  = coerceIt
   . either (error "shitty code") id
   . parseOnly parseTerm
 
@@ -76,7 +70,7 @@ unsafeGetPrimitiveBinding :: [Binding] -> Text -> App (Term Identity)
 unsafeGetPrimitiveBinding bs name = do
   let z = unsafeGetPrimitiveBinding' bs name
   reassoc <- gets $ getAssocs . ctxReassocs
-  pure $ coerceIt reassoc z
+  pure $ coerceIt $ reassoc z
 
 
 unsafeGetPrimitiveBinding' :: [Binding] -> Text -> Term Void1
@@ -117,7 +111,6 @@ macros =
           (shellCmd :: String) = T.unpack $ termToShell cmdTerm
 
       stdout <- lift $ fmap T.pack $ readCreateProcess (shell shellCmd) ""
-      _ <- lift $ print stdout
       pure $ either (error $ "***Shell parse*** " <> T.unpack stdout) id . parseOnly parseImplicitGroup $ stdout
 
   , Primitive (doAParseJob "(get user input)") $ \_ -> do
@@ -153,24 +146,24 @@ force t = do
     Nothing -> pure t
     Just (t', _) -> force t'
 
-coerceIt :: (Term Void1 -> Term Void1) -> Term Void1 -> Term Identity
-coerceIt reassoc (reassoc -> Sym s)
+coerceIt :: Term Void1 -> Term Identity
+coerceIt (Sym s)
   | T.isPrefixOf "#" s  = MatchVariable $ Identity s
   | T.isPrefixOf "!#" s = Step $ Identity $ MatchVariable $ Identity $ T.drop 1 s
-  | T.isPrefixOf "!" s = Step $ Identity $ Sym $ T.drop 1 s
+  | T.isPrefixOf "!" s  = Step $ Identity $ Sym $ T.drop 1 s
   | otherwise           = Sym s
-coerceIt reassoc (reassoc -> Group g)         = Group $ foldStepParser reassoc g
-coerceIt reassoc (reassoc -> MatchVariable a) = absurd a
-coerceIt reassoc (reassoc -> Step a)          = absurd a
+coerceIt (Group g)         = Group $ foldStepParser g
+coerceIt (MatchVariable a) = absurd a
+coerceIt (Step a)          = absurd a
 
-foldStepParser :: (Term Void1 -> Term Void1) -> [Term Void1] -> [Term Identity]
-foldStepParser _ [] = []
-foldStepParser reassoc (Sym "!" : a : as) = Step (Identity $ coerceIt reassoc a) : foldStepParser reassoc as
-foldStepParser reassoc (a : as) = coerceIt reassoc a : foldStepParser reassoc as
+foldStepParser :: [Term Void1] -> [Term Identity]
+foldStepParser [] = []
+foldStepParser (Sym "!" : a : as) = Step (Identity $ coerceIt a) : foldStepParser as
+foldStepParser (a : as) = coerceIt a : foldStepParser as
 
 attemptMacro :: (Term Void1 -> Term Void1) -> Term Void1 -> Macro -> App (Maybe (Term Void1, (Macro, [Binding])))
 attemptMacro reassoc prog m@(Primitive pattern rewrite) = do
-  mbs <- pure $ attemptToBind reassoc prog pattern
+  mbs <- pure $ attemptToBind (reassoc prog) pattern
   case mbs of
     Just bs -> do
       z <- rewrite bs
@@ -178,41 +171,35 @@ attemptMacro reassoc prog m@(Primitive pattern rewrite) = do
     Nothing -> pure Nothing
 
 attemptMacro reassoc prog m@(Macro pattern rewrite) = do
-  mbs <- pure $ attemptToBind reassoc prog pattern
+  mbs <- pure $ attemptToBind (reassoc prog) pattern
   case mbs of
     Just bs -> fmap (Just . (, (m, bs))) $ substBindings bs rewrite
     Nothing -> pure Nothing
 
 mkAssoc :: AssocLevel -> (Term Void1 -> Term Void1) -> App ()
-mkAssoc l f = modify $ \s ->
-  s & field @"ctxReassocs" <>~ \l' ->
+mkAssoc level f = modify $ \s ->
+  s & field @"ctxReassocs" <>~ \level' ->
     Endo $
-      if l == l'
+      if level == level'
          then f
          else id
 
-withGroupAssoc
-    :: ([Term Void1] -> [Term Void1])
-    -> Term Void1
-    -> Term Void1
-withGroupAssoc f (Group g) = Group $ f g
-withGroupAssoc _ a = a
-
 rassoc :: Text -> Term Void1 -> Term Void1
-rassoc t = withGroupAssoc go
-  where
-    go [] = []
-    go g =
-      let (a, b) = span (/= Sym t) g
-       in case b of
-            [] -> a
-            _ -> [groupIfNotSingleton a, Sym t, groupIfNotSingleton (go $ drop 1 b)]
+rassoc _ (Group []) = Group []
+rassoc sep (Group listOfTerms) =
+  let (beforeSep, rest) = span (/= Sym sep) listOfTerms
+      afterSep = drop 1 rest
+      normedHead = groupOrSingleTerm beforeSep
+      normedTail = groupOrSingleTerm afterSep
+  in
+    case rest of
+      [] -> normedHead
+      _ -> Group $ [normedHead, Sym sep, rassoc sep normedTail]
+rassoc _ term = term
 
-
-groupIfNotSingleton :: [Term a] -> Term a
-groupIfNotSingleton [a] = a
-groupIfNotSingleton a = Group a
-
+groupOrSingleTerm :: [Term a] -> Term a
+groupOrSingleTerm [a] = a
+groupOrSingleTerm a = Group a
 
 getAssocs :: (AssocLevel -> Endo (Term Void1)) -> Term Void1 -> Term Void1
 getAssocs f = appEndo $ foldMap f $ reverse [minBound .. maxBound]

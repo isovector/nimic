@@ -1,0 +1,10 @@
+; dot #file #graph =>
+  ( bash (echo " #graph " | dot -Tpng -o #file)
+  ; bash (open #file)
+  )
+; dot test2.png (
+    digraph graphname {
+         a -> b -> c;
+         b -> d;
+    }
+)

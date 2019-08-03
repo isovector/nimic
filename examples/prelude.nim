@@ -1,20 +1,10 @@
-(macro (#a ; #b) #b)
-; ((rassoc 1 ;)
-; macro
-  ( #a
-    ----------
-    #b
+((macro (defined ; #b) #b)
+  ; ( (rassoc 1 ;)
+    ; macro (#a => #b) (macro #a #b)
+    ; (() ; #a) => #a
+    ; rassoc 2 =>
+    ; import #module => bash (cat #module)
+    ; import examples/math.nim
+    ; math (1 + 2)
   )
-  (macro #a #b)
-
-; rassoc 2 ----------
-; rassoc 3 //
-
-; import #file
-  ----------
-  bash (cat #file)
-
-; import examples/math.nim
-
-; import examples/judgements.nim
 )

@@ -1,26 +1,35 @@
-; rassoc 2 <=>
-; macro (#a <=> #b) (macro #a #b)
+; math #m => bash (bc <<< " #m ")
 
-; rassoc 3 math
-; math #m <=> bash (bc <<< " #m ")
+; assert-false #v => assert-false !#v
+; assert-true #v => assert-true !#v
 
-; even? #n <=> -even? !(math #n % 2)
-; -even? 0 <=> true
-; -even? 1 <=> false
+; assert-false false => ()
+; assert-true true => ()
 
-; even? 33
+; zero? #n => false
+; zero? 0 => true
 
-; while #index #p #b <=>
-   -while #index #p #b 0
+; not true => false
+; not false => true
 
-; -while #index #p #b #c <=>
-    (--while #index !(replace #p #index #c) #p #b #c)
-; --while #index true #p #b #c <=>
-    ( replace #b #index #c
-    ; -while #index #p #b (!(math #c + 1))
+; #a < #b => not !(zero? !(math (#a < #b)))
+
+; even? #n => -even? !(math (!#n % 2))
+; -even? 0 => true
+; -even? 1 => false
+
+; assert-false (even? 33)
+
+; inc #i => math (#i + 1)
+
+; while #i #p #b => -while #i #p #b 0
+; -while #i #p #b #c => --while #i !(replace #p #i #c) #p #b #c
+; --while #i true #p #b #c =>
+    ( replace #b #i #c
+    ; -while #i #p #b !(inc #c)
     )
-; --while #index false #p #b #c <=> done
+; --while #i false #p #b #c => ()
 
 ; while <i>
-        (even? <i>)
-        (math <i> * 2)
+        (<i> < 2)
+        (assert-true (even? (math (<i> * 2))))

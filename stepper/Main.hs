@@ -38,15 +38,15 @@ goPrev a@(StepCtx prog) =
     Nothing -> a
 
 goNext :: StepCtx -> StepCtx
-goNext (StepCtx prog) =
+goNext a@(StepCtx prog) =
   case next prog of
     Just z -> StepCtx z
-    Nothing -> StepCtx $ flip insertRight prog $ do
+    Nothing ->
       let (t, c) = _focus prog
           (mt, c') = unsafePerformIO $ runStateT (step t) c
        in case mt of
-            Just t' -> (fst t', c')
-            Nothing -> error "stuck!"
+            Just t' -> StepCtx $ insertRight (fst t', c') prog
+            Nothing -> a
 
 bindingsToColors :: [Binding] -> String -> String
 bindingsToColors bs = appEndo $ flip foldMap (zip bs bindingColors) $ \(Binding n _, color) ->
@@ -81,11 +81,6 @@ runApp ctx ma = unsafePerformIO $ evalStateT ma $ snd $ _focus $ stepProgram ctx
 
 data StepCtx = StepCtx
   { stepProgram :: PointedList (Term Void1, NimicCtx)
-  } deriving Generic
-
-data St = St
-  { topLayerLocation :: T.Location
-  , bottomLayerLocation :: T.Location
   } deriving Generic
 
 drawUi :: StepCtx -> [Widget ()]
@@ -179,17 +174,11 @@ app =
 main :: IO ()
 main = do
   [filepath] <- getArgs
-  prelcont <- T.readFile "examples/prelude.nim"
   progcont <- T.readFile filepath
-  let res = (,) <$> parseOnly parseImplicitGroup prelcont
-                <*> parseOnly parseImplicitGroup progcont
+  let nimicCtx = NimicCtx macros mempty
 
-  case res of
+  case parseOnly parseImplicitGroup progcont of
     Left err -> do
-      putStrLn "nimic parse error:"
-      putStrLn err
-    Right (prel, prog) -> do
-      z <- flip runStateT (NimicCtx macros mempty) $ do
-        ran_prelude <- force prel
-        pure $ Group [ ran_prelude, Sym ";",  prog ]
-      void $ M.defaultMain app $ StepCtx $ singleton $ z
+      putStrLn $ "nimic parse error: " <> err
+    Right prog -> do
+      void $ M.defaultMain app $ StepCtx $ singleton (prog, nimicCtx)

@@ -13,18 +13,14 @@ import           Types
 
 
 parseToken :: Parser Text
-parseToken = do
-  c <- satisfy $ symbolChar
-  cs <- parseToken'
-  pure $ T.pack $ c:cs
+parseToken = takeWhile1 symbolChar
 
-
-parseToken' :: Parser [Char]
-parseToken' = do
-  mc <- peekChar
-  case mc of
-    Just c | symbolChar c -> (:) <$> char c <*> parseToken'
-    _ -> pure []
+symbolChar :: Char -> Bool
+symbolChar c = not $ or
+  [ isSpace c
+  , c == '('
+  , c == ')'
+  ]
 
 parseSym :: Parser (Term a)
 parseSym = do
@@ -48,14 +44,6 @@ parseImplicitGroup = do
     case subTerm of
       [a] -> a
       _   -> Group subTerm
-
-
-symbolChar :: Char -> Bool
-symbolChar c = not $ or
-  [ isSpace c
-  , c == '('
-  , c == ')'
-  ]
 
 parseMatchVariable :: CanParseVar a => Parser (Term a)
 parseMatchVariable = do
